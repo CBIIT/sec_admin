@@ -54,19 +54,60 @@ idleTimer();"
 
 dbinfo <- config::get()
 
-ui <- secure_app(fluidPage(# classic app
+ui <- secure_app(fluidPage(  useShinyjs(),
+                             useShinyFeedback(),
+                             tags$head(tags$style(HTML('
+
+                        .modal-lg {
+                        width: 95vw; height: 95vh;
+
+                        }
+                      '))),
+  # classic app
                      headerPanel(h3(
                          'SEC POC Administration'
                      )),
+         bsModal("add_criteria_per_trial_bsmodal", "Add criteria for a trial", "add_criteria_per_trial", size = "large",
+          fluidPage(id = "add_criteria_per_trial_bsmodal", 
+                    fluidRow( 
+                      column(6,  textInput("criteria_per_trial_nct_id","NCT ID")
+                              )
+                      
+                      ,
+                      column(6, 
+                             selectizeInput("criteria_type_typer", label = "Criteria Type", 
+                                            NULL, multiple = FALSE))
+                      
+                    )
+                    ,
+                    fluidRow(
                      
+                      textAreaInput("criteria_per_trial_original_text", "Original Text", value = "", rows = 7, resize = "both") %>%
+                        shiny::tagAppendAttributes(style = 'width: 90%;', align = 'center')
+                    ),
+                    
+          fluidRow(
+            
+            textAreaInput('criteria_per_trial_refined_text', 'Refined Text', width = '90%' , rows = 7, resize = "both") %>%
+              shiny::tagAppendAttributes(style = 'width: 90%;', align = 'center')
+          ),
+          fluidRow(
+            
+            textAreaInput('criteria_per_trial_Expression', 'Expression', width = '90%' , rows = 7, resize = "both") %>%
+              shiny::tagAppendAttributes(style = 'width: 90%;', align = 'center')
+          )
+          ) ),
+  
                          tabsetPanel(
                              type = "tabs",
                              tabPanel("Criteria Types",
                                       sidebarLayout(
                                           # Sidebar panel
                                           sidebarPanel(
-                                              actionButton("edit_criteria_type", "Edit", width = '100px'),
                                               actionButton("add_criteria_type", "Add", width = '100px'),
+                                              br(),
+                                              actionButton("edit_criteria_type", "Edit", width = '100px'),
+                                              br(),
                                               actionButton("delete_criteria_type", "Delete", width = '100px')
                                           )
                                           
@@ -78,7 +119,16 @@ ui <- secure_app(fluidPage(# classic app
                                       )),
                              tabPanel("Trial Criteria by Type", 
                                       sidebarLayout(sidebarPanel(
-                                          DTOutput("criteria_types_title_only")  
+                                          DTOutput("criteria_types_title_only"),
+                                          br(),
+                                          actionButton("add_criteria_by_type", "Add", width = '100px'),
+                                          br(),
+                                          actionButton("edit_criteria_by_type", "Edit", width = '100px'),
+                                          br(),
+                                          actionButton("delete_criteria_by_type", "Delete", width = '100px'),
+                                          br(),
+                                          actionButton("import_criteria_by_type", "Import CSV", width = '100px')
+                                          
                                       ),
                                       mainPanel(DTOutput("trial_crit_by_type"))
                                       )
@@ -86,7 +136,13 @@ ui <- secure_app(fluidPage(# classic app
                                       ), #end of trial criteria per type 
                              tabPanel("Criteria Per Trial",
                                       sidebarLayout(sidebarPanel(
-                                        DTOutput("criteria_nct_ids")  
+                                        DTOutput("criteria_nct_ids"),
+                                        br(),
+                                        actionButton("add_criteria_per_trial", "Add", width = '100px'),
+                                        br(),
+                                        actionButton("edit_criteria_per_trial", "Edit", width = '100px'),
+                                        br(),
+                                        actionButton("delete_criteria_per_trial", "Delete", width = '100px')
                                       ),
                                       mainPanel(DTOutput("trial_crit_per_trial"))
                                       )
@@ -94,8 +150,8 @@ ui <- secure_app(fluidPage(# classic app
                        
                      ))
                  ,
-                 enable_admin = TRUE
-                )
+                 enable_admin = TRUE)
+                
 
 server <- function(input, output, session) {
     
@@ -191,7 +247,7 @@ server <- function(input, output, session) {
                                                 
                                                 targets = c(0)
                                               )),
-                                              scrollY = "45vh",
+                                              scrollY = "40vh",
                                               scrollCollapse = TRUE,
                                               style = "overflow-y: scroll"
                                               )
@@ -200,7 +256,6 @@ server <- function(input, output, session) {
     output$criteria_nct_ids <- DT::renderDataTable({criteria_nct_ids_dt})
     
     DBI::dbDisconnect(con)
-    
     
     
     #
@@ -238,11 +293,9 @@ server <- function(input, output, session) {
                                                autoWidth = TRUE,
                                                scrollX = TRUE,
                                                deferRender = TRUE,
-                                               # scrollY = "400px",
                                                scrollY = "45vh",
                                                scrollCollapse = TRUE,
                                                paging = TRUE,
-                                               #paging = TRUE,
                                                style = "overflow-y: scroll"
                                                )
             )
@@ -288,11 +341,9 @@ where tc.nct_id = ?"
                                                  autoWidth = TRUE,
                                                  scrollX = TRUE,
                                                  deferRender = TRUE,
-                                                 # scrollY = "400px",
                                                  scrollY = "45vh",
                                                  scrollCollapse = TRUE,
                                                  paging = TRUE,
-                                                 #paging = TRUE,
                                                  style = "overflow-y: scroll"
                                                )
         )
@@ -304,8 +355,12 @@ where tc.nct_id = ?"
     }
     ,
     ignoreNULL = FALSE
-    )
+    ) #
     
+    observeEvent(input$add_criteria_per_trial, {
+     print("Add criteria per trial") 
+    }
+    )
 }
 
 

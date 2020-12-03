@@ -84,7 +84,13 @@ ui <- secure_app(fluidPage(# classic app
                                       )
                                       
                                       ), #end of trial criteria per type 
-                             tabPanel("Criteria Per Trial", tableOutput("table"))
+                             tabPanel("Criteria Per Trial",
+                                      sidebarLayout(sidebarPanel(
+                                        DTOutput("criteria_nct_ids")  
+                                      ),
+                                      mainPanel(DTOutput("trial_crit_per_trial"))
+                                      )
+                             )
                        
                      ))
                  ,
@@ -159,9 +165,47 @@ server <- function(input, output, session) {
     )
     
     output$criteria_types_title_only <- DT::renderDataTable({criteria_types_titles_dt})
+    
+    
+    
+    
+    
+    criteria_nct_ids_sql <- "select distinct nct_id from trial_criteria order by nct_id"
+    df_criteria_nct_id <- dbGetQuery(con, criteria_nct_ids_sql)
+    
+    criteria_nct_ids_dt <- datatable(df_criteria_nct_id,
+                                          class = 'cell-border stripe compact wrap hover',
+                                          selection = 'single',
+                                          colnames = c(
+                                            'NCT ID'
+                                          ),
+                                          options = list(
+                                            escape = FALSE,
+                                            searching = TRUE,
+                                            paging = TRUE,
+                                            info = TRUE,
+                                            columnDefs = list(
+                                              # Initially hidden columns
+                                              list(
+                                                visible = FALSE,
+                                                
+                                                targets = c(0)
+                                              )),
+                                              scrollY = "45vh",
+                                              scrollCollapse = TRUE,
+                                              style = "overflow-y: scroll"
+                                              )
+    )
+    
+    output$criteria_nct_ids <- DT::renderDataTable({criteria_nct_ids_dt})
+    
     DBI::dbDisconnect(con)
     
-    #### Row selected in trial criteria by type table
+    
+    
+    #
+    # Row selected in trial criteria by type table
+    #
     
     observeEvent(input$criteria_types_title_only_rows_selected, {
         print("criteria types row selected ")
@@ -205,6 +249,62 @@ server <- function(input, output, session) {
             output$trial_crit_by_type <- DT::renderDataTable({trial_criteria_by_type_dt})
         }
     } , ignoreNULL = FALSE )
+    #
+    
+    #
+    # Row selected in trial criteria by trial
+    #
+    
+    observeEvent(input$criteria_nct_ids_rows_selected, {
+      print("nct_id  row selected ")
+      if (!is.null(input$criteria_nct_ids_rows_selected) ) {
+        # a NCT ID is selected
+        nct_id_sel <- df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
+        print(paste("nct_id selected:", nct_id_sel))
+        trial_crit_for_ncit_id_sql <- "select tc.nct_id, ct.criteria_type_title, tc.trial_criteria_orig_text, tc.trial_criteria_refined_text, 
+tc.trial_criteria_expression, tc.update_date, tc.update_by 
+from trial_criteria tc join criteria_types ct on tc.criteria_type_id= ct.criteria_type_id
+where tc.nct_id = ?"
+        sessionCon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+        df_trial_criteria_for_nct_id <- dbGetQuery(sessionCon, trial_crit_for_ncit_id_sql,  params = c(nct_id_sel))
+        
+        DBI::dbDisconnect(sessionCon)
+        
+        trial_criteria_for_nct_id_dt <- datatable(df_trial_criteria_for_nct_id,
+                                               class = 'cell-border stripe compact wrap hover',
+                                               selection = 'single',
+                                               width  = "90vw",
+                                               colnames = c(
+                                                 'NCT ID',
+                                                 'Type',
+                                                 'Original Text',
+                                                 'Refined Text',
+                                                 'Expression',
+                                                 'Last Updated',
+                                                 'Last Updated By'),
+                                               options = list(
+                                                 info = TRUE,
+                                                 searching = TRUE,
+                                                 autoWidth = TRUE,
+                                                 scrollX = TRUE,
+                                                 deferRender = TRUE,
+                                                 # scrollY = "400px",
+                                                 scrollY = "45vh",
+                                                 scrollCollapse = TRUE,
+                                                 paging = TRUE,
+                                                 #paging = TRUE,
+                                                 style = "overflow-y: scroll"
+                                               )
+        )
+        output$trial_crit_per_trial <- DT::renderDataTable({trial_criteria_for_nct_id_dt})
+        
+        
+      }
+    
+    }
+    ,
+    ignoreNULL = FALSE
+    )
     
 }
 

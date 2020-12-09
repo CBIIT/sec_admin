@@ -118,6 +118,10 @@ ui <- secure_app(
             6, radioButtons("criteria_type_sense_rb","Active", choices = c("Inclusion" = "Inclusion", "Exclusion" = "Exclusion"), inline = TRUE)
           )
         )
+        ,
+        fluidRow(
+          column(1, align = 'right',  offset = 11,actionButton("criteria_type_save", label='Save'))
+        )
       )
     ),
     bsModal(
@@ -164,15 +168,23 @@ ui <- secure_app(
             shiny::tagAppendAttributes(style = 'width: 90%;', align = 'center')
         ),
         fluidRow(
+        
           textAreaInput(
-            'criteria_per_trial_Expression',
+            'criteria_per_trial_expression',
             'Expression',
             width = '90%' ,
             rows = 7,
             resize = "both"
           ) %>%
             shiny::tagAppendAttributes(style = 'width: 90%;', align = 'center')
+          
+          
         )
+       , 
+       fluidRow(
+         column(1, alight='right', actionButton("criteria_test_eval", label = "Test Expression")),
+         column(1, align = 'right',  offset = 10,actionButton("criteria_save", label='Save'))
+       )
       )
     ),
     
@@ -206,7 +218,13 @@ ui <- secure_app(
             br(),
             actionButton("delete_criteria_by_type", "Delete", width = '100px'),
             br(),
-            actionButton("import_criteria_by_type", "Import CSV", width = '100px')
+            br(),
+            fileInput("trial_criteria_csv_file", "Upload CSV File",
+                      accept = c(
+                        "text/csv",
+                        "text/comma-separated-values,text/plain",
+                        ".csv")
+            )
             
           ),
           mainPanel(DTOutput("trial_crit_by_type"))
@@ -260,6 +278,10 @@ server <- function(input, output, session) {
   
   
   shinyjs::disable("edit_criteria_type")
+  shinyjs::disable('edit_criteria_by_type')
+  shinyjs::disable('delete_criteria_by_type')
+  shinyjs::disable('add_criteria_by_type')
+  
   
   
   con = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
@@ -407,7 +429,6 @@ server <- function(input, output, session) {
         updateRadioButtons(session, 'criteria_type_sense_rb', selected = 'Inclusion')
         sessionInfo$criteria_type_modal_type_id <- NA
         
-        
       }
       
       
@@ -441,6 +462,31 @@ server <- function(input, output, session) {
                  
                })
   
+  
+  observeEvent(
+    input$criteria_type_save, 
+    {
+      print("criteria type save button clicked")
+    }
+  )
+  #----------------------------------------------------------------
+  #---------------------------------------------------------------
+  
+  #
+  # Row selected in trial criteria table by types 
+  #
+  observeEvent(input$trial_crit_by_type_rows_selected, {
+  if (!is.null(input$trial_crit_by_type_rows_selected)) {
+    shinyjs::enable('edit_criteria_by_type')
+    shinyjs::enable('delete_criteria_by_type')
+  } else {
+    shinyjs::disable('edit_criteria_by_type')
+    shinyjs::disable('delete_criteria_by_type')
+  }
+    
+  },
+  ignoreNULL= FALSE 
+  )
   #
   # Row selected in trial criteria by type table
   #
@@ -450,6 +496,10 @@ server <- function(input, output, session) {
                  print("criteria types row selected ")
                  print(input$criteria_types_title_only_rows_selected)
                  if (!is.null(input$criteria_types_title_only_rows_selected)) {
+                   shinyjs::enable('add_criteria_by_type')
+                   
+                  
+                   
                    print(paste("user is ", sessionInfo$result_auth$user))
                    crit_type_sel <-
                      df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
@@ -495,10 +545,16 @@ server <- function(input, output, session) {
                      DT::renderDataTable({
                        trial_criteria_by_type_dt
                      })
+                 } else {
+                   shinyjs::disable('add_criteria_by_type')
+                   
                  }
                } ,
                ignoreNULL = FALSE)
   #
+  
+  #---------------------------------------------------------
+  #---------------------------------------------------------
   
   #
   # Row selected in trial criteria by trial
@@ -566,6 +622,22 @@ where tc.nct_id = ?"
   observeEvent(input$add_criteria_per_trial, {
     print("Add criteria per trial")
   })
+  
+  #-------------------------
+  
+  #
+  # Disable or enable the test button based upon whether there is anything in the input field
+  #
+  observeEvent(input$criteria_per_trial_expression , {
+    print(input$criteria_per_trial_expression)
+    
+    if(!is.null(input$criteria_per_trial_expression) &&  nchar(input$criteria_per_trial_expression[1]) > 0) {
+      shinyjs::enable('criteria_test_eval')
+    }  else {
+      shinyjs::disable('criteria_test_eval')
+    }
+    
+  }, ignoreNULL = FALSE)
 }
 
 

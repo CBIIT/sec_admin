@@ -262,6 +262,7 @@ ui <- secure_app(
 server <- function(input, output, session) {
   sessionInfo <- reactiveValues(
     df_trial_criteria_for_type = NA,
+    df_trial_criteria_for_nct_id = NA,
     criteria_type_selected_in_tab = NA,
     criteria_type_modal_state = "Neutral",
     criteria_type_modal_type_id = NA,
@@ -289,6 +290,8 @@ server <- function(input, output, session) {
   shinyjs::disable('edit_criteria_by_type')
   shinyjs::disable('delete_criteria_by_type')
   shinyjs::disable('add_criteria_by_type')
+  shinyjs::disable('edit_criteria_per_trial')
+  shinyjs::disable('delete_criteria_per_trial')
   
   
   
@@ -597,7 +600,7 @@ tc.trial_criteria_expression, tc.update_date, tc.update_by
 from trial_criteria tc join criteria_types ct on tc.criteria_type_id= ct.criteria_type_id
 where tc.nct_id = ?"
       sessionCon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
-      df_trial_criteria_for_nct_id <-
+      sessionInfo$df_trial_criteria_for_nct_id <-
         dbGetQuery(sessionCon,
                    trial_crit_for_ncit_id_sql,
                    params = c(nct_id_sel))
@@ -606,7 +609,7 @@ where tc.nct_id = ?"
       
       trial_criteria_for_nct_id_dt <-
         datatable(
-          df_trial_criteria_for_nct_id,
+          sessionInfo$df_trial_criteria_for_nct_id,
           class = 'cell-border stripe compact wrap hover',
           selection = 'single',
           width  = "90vw",
@@ -676,16 +679,27 @@ where tc.nct_id = ?"
           df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
         print(paste("nct_id selected:", nct_id_sel))
         updateTextInput(session, 'criteria_per_trial_nct_id', value = nct_id_sel)
-        updateTextAreaInput(session, 'criteria_per_trial_refined_text', value = df_sel_crit$trial_criteria_refined_text)
-        updateTextAreaInput(session, 'criteria_per_trial_expression', value = df_sel_crit$trial_criteria_expression)
-        updateTextAreaInput(session, 'criteria_per_trial_original_text', value = df_sel_crit$trial_criteria_orig_text)
+        updateTextAreaInput(session, 'criteria_per_trial_refined_text', value = '')
+        updateTextAreaInput(session, 'criteria_per_trial_expression', value = '')
+        updateTextAreaInput(session, 'criteria_per_trial_original_text', value = '')
       } else {
         updateTextInput(session, 'criteria_per_trial_nct_id', value = '')
-        updateTextAreaInput(session, 'criteria_per_trial_refined_text', value = df_sel_crit$trial_criteria_refined_text)
-        updateTextAreaInput(session, 'criteria_per_trial_expression', value = df_sel_crit$trial_criteria_expression)
-        updateTextAreaInput(session, 'criteria_per_trial_original_text', value = df_sel_crit$trial_criteria_orig_text)
+        updateTextAreaInput(session, 'criteria_per_trial_refined_text', value = '')
+        updateTextAreaInput(session, 'criteria_per_trial_expression', value = '')
+        updateTextAreaInput(session, 'criteria_per_trial_original_text', value = '')
         
       }
+    } else if (sessionInfo$criteria_modal_state == 'EditByTrial') {
+      nct_id_sel <-
+        df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
+      print(paste("nct_id selected:", nct_id_sel))
+      df_sel_crit <- sessionInfo$df_trial_criteria_for_nct_id[input$trial_crit_per_trial_rows_selected,]
+      updateSelectizeInput(session, 'criteria_type_typer', 
+                           selected=  df_sel_crit$criteria_type_title)
+      updateTextInput(session, 'criteria_per_trial_nct_id', value = nct_id_sel)
+      updateTextAreaInput(session, 'criteria_per_trial_refined_text', value = df_sel_crit$trial_criteria_refined_text)
+      updateTextAreaInput(session, 'criteria_per_trial_expression', value = df_sel_crit$trial_criteria_expression)
+      updateTextAreaInput(session, 'criteria_per_trial_original_text', value = df_sel_crit$trial_criteria_orig_text)
     }
   }
   )
@@ -709,6 +723,32 @@ where tc.nct_id = ?"
     
   }
   )
+  
+  
+  #
+  # Row selected in trial criteria table per trial
+  #
+  observeEvent(input$trial_crit_per_trial_rows_selected, {
+    if (!is.null(input$trial_crit_per_trial_rows_selected)) {
+      shinyjs::enable('edit_criteria_per_trial')
+      shinyjs::enable('delete_criteria_per_trial')
+    } else {
+      shinyjs::disable('edit_criteria_per_trial')
+      shinyjs::disable('delete_criteria_per_trial')
+    }
+    
+  },
+  ignoreNULL= FALSE 
+  )
+  
+  
+  observeEvent(input$edit_criteria_per_trial, {
+    print("edit criteria per trial")
+    sessionInfo$criteria_modal_state <- 'EditByTrial'
+    click('add_criteria_per_trial')
+    
+    
+  })
   #-------------------------
   
   #
@@ -725,6 +765,7 @@ where tc.nct_id = ?"
     
   }, ignoreNULL = FALSE)
   
+  # Test the criteria in the environment 
   observeEvent(input$criteria_test_eval, {
     print("testing criteria")
     createAlert(session, 'sec_admin_alert', title = "Criteria Test", content = "Criteria Expression Valid")

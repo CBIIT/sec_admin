@@ -24,28 +24,6 @@ library(sjmisc)
 library(lubridate)
 library(shinyFeedback)
 library(keyring)
-source('get_criteria_type_for_string.R')
-
-inactivity <- "function idleTimer() {
-var t = setTimeout(logout, 600000);
-window.onmousemove = resetTimer; // catches mouse movements
-window.onmousedown = resetTimer; // catches mouse movements
-window.onclick = resetTimer;     // catches mouse clicks
-window.onscroll = resetTimer;    // catches scrolling
-window.onkeypress = resetTimer;  //catches keyboard actions
-
-function logout() {
-window.close();  //close the window
-}
-
-function resetTimer() {
-clearTimeout(t);
-t = setTimeout(logout, 600000);  // time is in milliseconds (1000 is 1 second)
-}
-}
-idleTimer();"
-
-
 
 
 dbinfo <- config::get()
@@ -494,6 +472,7 @@ server <- function(input, output, session) {
     input$criteria_type_save, 
     {
       print("criteria type save button clicked")
+      print(paste("state - ", sessionInfo$criteria_type_modal_state ))
     }
   )
   #----------------------------------------------------------------
@@ -646,6 +625,14 @@ where tc.nct_id = ?"
   ,
   ignoreNULL = FALSE) #
   
+  #-------------------------------------------------------------------------------------------
+  #
+  # Add criteria button is pressed.
+  # The same dialog is used for edit and additions - and the reactive value stored in 
+  # sesssionInfo$criteria_modal_state indicates the origin of this. 
+  #
+  #-------------------------------------------------------------------------------------------
+  
   observeEvent(input$add_criteria_per_trial, {
     print("Add criteria per trial")
     if(sessionInfo$criteria_modal_state == 'AddByType') {
@@ -749,6 +736,12 @@ where tc.nct_id = ?"
     
     
   })
+  
+  observeEvent(input$criteria_save, {
+    print("criteria save button")
+    print(paste("state  = ", sessionInfo$criteria_modal_state))
+  }
+  )
   #-------------------------
   
   #

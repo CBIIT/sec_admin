@@ -58,6 +58,23 @@ ui <- secure_app(
   fluidPage(
     useShinyjs(),
     useShinyFeedback(),
+    
+    #
+    # Wire up the close button on the criteria types modal to fire a shiny event 
+    # so the data can be processed 
+    #
+    
+    tags$script('
+  $( document ).ready(function() {
+    $("#add_criteria_type_bsmodal").on("hidden.bs.modal", function (event) {
+    x = new Date().toLocaleString();
+    // window.alert("biomarker  modal was closed at " + x);
+    Shiny.onInputChange("add_criteria_type_bsmodal_close",x);
+  });
+  })
+  '),
+    
+    
     tags$head(tags$style(
       HTML('
 
@@ -70,6 +87,10 @@ ui <- secure_app(
     # classic app
     headerPanel(h3('SEC POC Administration')),
     
+    # 
+    # Criteria Type Modal
+    #
+    
     bsModal(
       "add_criteria_type_bsmodal",
       "Add criteria type",
@@ -78,9 +99,9 @@ ui <- secure_app(
       fluidPage(
         fluidRow(
           column( 
-            6, textInput("criteria_trial_type_abbr", "Abbreviation")),
+            6, textInput("criteria_type_code", "Code")),
           column(
-            6, textInput("criteria_trial_type_title", "Title"))
+            6, textInput("criteria_type_title", "Title"))
           )
         ,
         fluidRow(
@@ -90,11 +111,11 @@ ui <- secure_app(
         ,
         fluidRow(
           column(
-            6, radioButtons("criteria_type_active","Active", choices = c("Y" = "Y", "N" = "N"), inline = TRUE)
+            6, radioButtons("criteria_type_active_rb","Active", choices = c("Y" = "Y", "N" = "N"), inline = TRUE)
           )
           ,
           column(
-            6, radioButtons("criteria_type_inc_exc","Active", choices = c("Inclusion" = "inclusion", "Exclusion" = "exclusion"), inline = TRUE)
+            6, radioButtons("criteria_type_sense_rb","Active", choices = c("Inclusion" = "Inclusion", "Exclusion" = "Exclusion"), inline = TRUE)
           )
         )
       )
@@ -217,6 +238,8 @@ ui <- secure_app(
 server <- function(input, output, session) {
   sessionInfo <- reactiveValues(
     criteria_type_selected_in_tab = NA,
+    criteria_type_modal_state = "Neutral",
+    criteria_type_modal_type_id = NA,
     sessionCon = NA,
     df_crit_type_titles = data.frame(matrix(
       ncol = 2,
@@ -355,11 +378,68 @@ server <- function(input, output, session) {
   # 
   # Add new criteria type button clicked
   #
-  observeEvent(input$add_criteria_type,
-               {
-                 print("add criteria type button clicked")
-               }
+  observeEvent(
+    input$add_criteria_type,
+    {
+      print("add criteria type button clicked")
+      print(sessionInfo$criteria_type_modal_state)
+      #
+      # If this is coming via an edit - we need to set the field values in the dialog
+      #
+      if(sessionInfo$criteria_type_modal_state == "Edit" &&  (!is.null(input$criteria_types_table_rows_selected)) )  {
+        print(paste("selected row is ", input$criteria_types_table_rows_selected))
+        print(paste("editing  ", df_crit_types[input$criteria_types_table_rows_selected,]))
+        rowdf <- df_crit_types[input$criteria_types_table_rows_selected,]
+        updateTextInput(session, 'criteria_type_code', value = rowdf$criteria_type_code)
+        updateTextInput(session, 'criteria_type_title', value = rowdf$criteria_type_title)
+        updateTextInput(session, 'criteria_type_desc', value = rowdf$criteria_type_desc)
+        updateRadioButtons(session, 'criteria_type_active_rb', selected = rowdf$criteria_type_active)
+        updateRadioButtons(session, 'criteria_type_sense_rb', selected = rowdf$criteria_type_sense)
+        sessionInfo$criteria_type_modal_type_id <- rowdf$criteria_type_id  # Stick this in the reactive values to use in the update statement.
+        #tags$script(HTML(
+        #  "$('#add_criteria_type_bsmodal-modal-title').val('Edit Criteria Type');"
+        #))
+      } else {
+        updateTextInput(session, 'criteria_type_code', value = '')
+        updateTextInput(session, 'criteria_type_title', value = '')
+        updateTextInput(session, 'criteria_type_desc', value = '')
+        updateRadioButtons(session, 'criteria_type_active_rb', selected = 'N')
+        updateRadioButtons(session, 'criteria_type_sense_rb', selected = 'Inclusion')
+        sessionInfo$criteria_type_modal_type_id <- NA
+        
+        
+      }
+      
+      
+    }
   )
+  
+  # 
+  # Edit new criteria type button clicked 
+  # Set the data and click the add_criteria_type button
+  #
+  
+  observeEvent(
+    input$edit_criteria_type,
+    {
+      print("edit criteria type button clicked")
+      print(sessionInfo$criteria_type_modal_state)
+      sessionInfo$criteria_type_modal_state <- "Edit"
+      click('add_criteria_type')
+      
+      
+    })
+  
+  
+  # 
+  # criteria types modal closed event 
+  #
+  observeEvent(input$add_criteria_type_bsmodal_close,
+               {
+                 print("criteria type modal closed")
+                 sessionInfo$criteria_type_modal_state <- "Neutral"
+                 
+               })
   
   #
   # Row selected in trial criteria by type table

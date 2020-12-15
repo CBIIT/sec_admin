@@ -80,6 +80,7 @@ ui <- secure_app(
       "add_criteria_type",
       size = "large",
       fluidPage(
+        bsAlert('criteria_type_modal_alert'),
         fluidRow(
           column( 
             6, textInput("criteria_type_code", "Code")),
@@ -114,7 +115,7 @@ ui <- secure_app(
       size = "large",
       fluidPage(
         id = "add_criteria_per_trial_bsmodal",
-        bsAlert('sec_admin_alert'),
+        bsAlert('criteria_modal_alert'),
         fluidRow(column(
           6,  textInput("criteria_per_trial_nct_id", "NCT ID")
         )
@@ -253,7 +254,10 @@ server <- function(input, output, session) {
         "criteria_type_id", "criteria_type_title"
       ))
     )) ,
-    result_auth = NA
+    result_auth = NA,
+    refresh_criteria_types_counter = 0,
+    refresh_criteria_counter = 0,
+    df_crit_types = NA
   )
   
   sessionInfo$result_auth <-
@@ -282,10 +286,14 @@ server <- function(input, output, session) {
   crit_type_sql <-
     "select criteria_type_id, criteria_type_code, criteria_type_title, criteria_type_desc, criteria_type_active, criteria_type_sense
      from criteria_types order by criteria_type_id"
-  df_crit_types <- dbGetQuery(con, crit_type_sql)
-  
+ 
+  observe( {
+    scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+    sessionInfo$df_crit_types <- dbGetQuery(scon, crit_type_sql)
+    DBI::dbDisconnect(scon)
+    
   criteria_types_dt <- datatable(
-    df_crit_types,
+    sessionInfo$df_crit_types,
     class = 'cell-border stripe compact wrap hover',
     selection = 'single',
     colnames = c('Type ID',
@@ -300,7 +308,8 @@ server <- function(input, output, session) {
     DT::renderDataTable({
       criteria_types_dt
     })
-  
+}
+)
   crit_type_titles_sql <-
     "select criteria_type_id,  criteria_type_title
      from criteria_types order by criteria_type_id"
@@ -429,6 +438,12 @@ server <- function(input, output, session) {
     }
   )
   
+  observeEvent( 
+    input$delete_criteria_type,
+    {
+      print("delete criteria type clicked")
+    }
+    )
   # 
   # Edit new criteria type button clicked 
   # Set the data and click the add_criteria_type button
@@ -453,12 +468,85 @@ server <- function(input, output, session) {
                {
                  print("criteria type modal closed")
                  sessionInfo$criteria_type_modal_state <- "Neutral"
-                 
+                 closeAlert(session, "criteria_type_code_alert")
+                 closeAlert(session, "criteria_type_title_alert")
                })
   
   
+
+  ##
+  # Save criteria types
+  #
+  
+  observeEvent(
+    input$criteria_type_save, 
+    {
+      input_error <- FALSE
+      print("criteria type save button clicked")
+      print(paste("state - ", sessionInfo$criteria_type_modal_state ))
+      # check for valid information
+      if(input$criteria_type_code == '' ) {
+        createAlert(session, 'criteria_type_modal_alert', 
+                    alertId = "criteria_type_code_alert", content = "Please enter a criteria code", style = 'danger')
+        input_error <- TRUE
+      } else {
+        closeAlert(session, "criteria_type_code_alert")
+      }
+      
+      if (input$criteria_type_title == '') {
+        createAlert(session, 'criteria_type_modal_alert', 
+                    alertId = "criteria_type_title_alert", content = "Please enter a title", style = 'danger')
+        input_error <- TRUE 
+      } else {
+        closeAlert(session, "criteria_type_title_alert")
+      }
+      
+      if (input$criteria_type_desc == '') {
+        createAlert(session, 'criteria_type_modal_alert', 
+                    alertId = "criteria_type_desc_alert", content = "Please enter a description", style = 'danger')
+        input_error <- TRUE 
+      } else {
+        closeAlert(session, "criteria_type_desc_alert")
+      }
+      
+      if(input_error) {
+        return
+      }
+      
+      if (sessionInfo$criteria_type_modal_state == 'Neutral') {
+        # insert
+        print("criteria type need to do an insert")
+        ct_insert <- "insert into criteria_types(criteria_type_code, criteria_type_title, criteria_type_desc,
+        criteria_type_active, criteria_type_sense) values (?,?,?,?,?)"
+        scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+        rs <- dbExecute(scon, ct_insert, 
+                           params = c(input$criteria_type_code,input$criteria_type_title,input$criteria_type_desc, 
+                                      input$criteria_type_active_rb, input$criteria_type_sense_rb))
+        print(rs)
+        DBI::dbDisconnect(scon)
+        sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
+        
+        
+      } else {
+        print("criteria type need to do an update")
+      }
+    }
+  )
+  
+  observeEvent(
+    sessionInfo$refresh_criteria_types_counter,
+    {
+      print("need to refresh criteria types")
+      scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+      sessionInfo$df_crit_types <- dbGetQuery(scon, crit_type_sql)
+      DBI::dbDisconnect(scon)
+      
+    })
+  #----------------------------------------------------------------
+  #---------------------------------------------------------------
+  
   # 
-  # criteria types modal closed event 
+  # criteria  modal closed event 
   #
   observeEvent(input$add_criteria_per_trial_bsmodal_close,
                {
@@ -467,16 +555,6 @@ server <- function(input, output, session) {
                  
                })
   
-  
-  observeEvent(
-    input$criteria_type_save, 
-    {
-      print("criteria type save button clicked")
-      print(paste("state - ", sessionInfo$criteria_type_modal_state ))
-    }
-  )
-  #----------------------------------------------------------------
-  #---------------------------------------------------------------
   
   #
   # Row selected in trial criteria table by types 
@@ -761,7 +839,7 @@ where tc.nct_id = ?"
   # Test the criteria in the environment 
   observeEvent(input$criteria_test_eval, {
     print("testing criteria")
-    createAlert(session, 'sec_admin_alert', title = "Criteria Test", content = "Criteria Expression Valid")
+    createAlert(session, 'criteria_modal_alert', title = "Criteria Test", content = "Criteria Expression Valid")
     
   })
 }

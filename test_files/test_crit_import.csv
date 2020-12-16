@@ -1,0 +1,3 @@
+criteria_type_id,nct_id,trial_criteria_orig_text,trial_criteria_refined_text,trial_criteria_expression
+25,NCT1010101,"Please drive safely",DRIVE SAFELY,C00000000 == 'YES'
+25,NCTLKJLJLKJLKJ,Foobar,FOOBAR,C9809808980

@@ -264,7 +264,8 @@ server <- function(input, output, session) {
     refresh_criteria_types_counter = 0,
     refresh_criteria_counter = 0,
     df_crit_types = NA,
-    df_crit_type_titles = NA
+    df_crit_type_titles = NA,
+    df_criteria_nct_id = NA
   )
   
   sessionInfo$result_auth <-
@@ -366,40 +367,42 @@ server <- function(input, output, session) {
   })
   
   
-  
-  
-  criteria_nct_ids_sql <-
-    "select distinct nct_id from trial_criteria order by nct_id"
-  df_criteria_nct_id <- dbGetQuery(con, criteria_nct_ids_sql)
-  
-  criteria_nct_ids_dt <- datatable(
-    df_criteria_nct_id,
-    class = 'cell-border stripe compact wrap hover',
-    selection = 'single',
-    colnames = c('NCT ID'),
-    options = list(
-      escape = FALSE,
-      searching = TRUE,
-      paging = TRUE,
-      info = TRUE,
-      columnDefs = list(# Initially hidden columns
-        list(
-          visible = FALSE,
-          
-          targets = c(0)
-        )),
-      scrollY = "40vh",
-      scrollCollapse = TRUE,
-      style = "overflow-y: scroll"
+  ## HH you are here -- wrap in observer in case nct_ids change 
+  observe( {
+    criteria_nct_ids_sql <-
+      "select distinct nct_id from trial_criteria order by nct_id"
+    sessionInfo$df_criteria_nct_id <- dbGetQuery(con, criteria_nct_ids_sql)
+    
+    criteria_nct_ids_dt <- datatable(
+      sessionInfo$df_criteria_nct_id,
+      class = 'cell-border stripe compact wrap hover',
+      selection = 'single',
+      colnames = c('NCT ID'),
+      options = list(
+        escape = FALSE,
+        searching = TRUE,
+        paging = TRUE,
+        info = TRUE,
+        columnDefs = list(# Initially hidden columns
+          list(
+            visible = FALSE,
+            
+            targets = c(0)
+          )),
+        scrollY = "40vh",
+        scrollCollapse = TRUE,
+        style = "overflow-y: scroll"
+      )
     )
+    
+    output$criteria_nct_ids <-
+      DT::renderDataTable({
+        criteria_nct_ids_dt
+      })
+    
+    DBI::dbDisconnect(con)
+  }
   )
-  
-  output$criteria_nct_ids <-
-    DT::renderDataTable({
-      criteria_nct_ids_dt
-    })
-  
-  DBI::dbDisconnect(con)
   
   #
   # Row selected in criteria types table
@@ -744,7 +747,7 @@ server <- function(input, output, session) {
     if (!is.null(input$criteria_nct_ids_rows_selected)) {
       # a NCT ID is selected
       nct_id_sel <-
-        df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
+        sessionInfo$df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
       print(paste("nct_id selected:", nct_id_sel))
       trial_crit_for_ncit_id_sql <-
         "select tc.nct_id, ct.criteria_type_title, tc.trial_criteria_orig_text, tc.trial_criteria_refined_text,
@@ -816,6 +819,7 @@ where tc.nct_id = ?"
       updateTextAreaInput(session, 'criteria_per_trial_refined_text', value = '')
       updateTextAreaInput(session, 'criteria_per_trial_expression', value = '')
       updateTextAreaInput(session, 'criteria_per_trial_original_text', value = '')
+      
     } else if (sessionInfo$criteria_modal_state == 'EditByType') {
       updateSelectizeInput(session, 'criteria_type_typer', 
                            selected=  sessionInfo$df_crit_type_titles$criteria_type_title[[input$criteria_types_title_only_rows_selected]])
@@ -829,6 +833,7 @@ where tc.nct_id = ?"
       updateTextAreaInput(session, 'criteria_per_trial_expression', value = df_sel_crit$trial_criteria_expression)
       updateTextAreaInput(session, 'criteria_per_trial_original_text', value = df_sel_crit$trial_criteria_orig_text)
       #browser()
+      
     } else if (sessionInfo$criteria_modal_state == 'Neutral') {
       #
       #Neutral - the click is from add criteria per trial
@@ -836,7 +841,7 @@ where tc.nct_id = ?"
       if (!is.null(input$criteria_nct_ids_rows_selected)) {
         # a NCT ID is selected
         nct_id_sel <-
-          df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
+          sessionInfo$df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
         print(paste("nct_id selected:", nct_id_sel))
         updateTextInput(session, 'criteria_per_trial_nct_id', value = nct_id_sel)
         updateTextAreaInput(session, 'criteria_per_trial_refined_text', value = '')
@@ -851,7 +856,7 @@ where tc.nct_id = ?"
       }
     } else if (sessionInfo$criteria_modal_state == 'EditByTrial') {
       nct_id_sel <-
-        df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
+        sessionInfo$df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
       print(paste("nct_id selected:", nct_id_sel))
       df_sel_crit <- sessionInfo$df_trial_criteria_for_nct_id[input$trial_crit_per_trial_rows_selected,]
       updateSelectizeInput(session, 'criteria_type_typer', 
@@ -949,6 +954,9 @@ where tc.nct_id = ?"
     
     insert_crit_sql <- "insert into trial_criteria(nct_id, criteria_type_id, trial_criteria_orig_text,trial_criteria_refined_text,
         trial_criteria_expression, update_date, update_by) values(?,?,?,?,?,?,?)"
+    update_crit_sql <- "update trial_criteria set trial_criteria_orig_text = ? , trial_criteria_refined_text = ?, 
+    trial_criteria_expression = ?, update_date = ?, update_by = ? where nct_id = ? and criteria_type_id = ? " 
+    
     type_row_df <- sessionInfo$df_crit_type_titles[sessionInfo$df_crit_type_titles$criteria_type_title == input$criteria_type_typer,]
     
     if(sessionInfo$criteria_modal_state == "AddByType" && input_error_crit == FALSE ) {
@@ -968,9 +976,46 @@ where tc.nct_id = ?"
       # save was successful, and close the panel and clear the fields
       toggleModal(session,  "add_criteria_per_trial_bsmodal", toggle = "close")
       sessionInfo$refresh_criteria_counter <- sessionInfo$refresh_criteria_counter + 1
+    } else if (sessionInfo$criteria_modal_state == "EditByType" && input_error_crit == FALSE ) {
+      
+      scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+      rs <- dbExecute(scon, update_crit_sql, 
+                      params = c(input$criteria_per_trial_original_text,input$criteria_per_trial_refined_text,
+                                 input$criteria_per_trial_expression, format_iso_8601(Sys.time()),
+                                 sessionInfo$result_auth$user,input$criteria_per_trial_nct_id, type_row_df$criteria_type_id ))
+      print(rs)
+      DBI::dbDisconnect(scon)
+      #sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
+      # save was successful, and close the panel and clear the fields
+      toggleModal(session,  "add_criteria_per_trial_bsmodal", toggle = "close")
+      sessionInfo$refresh_criteria_counter <- sessionInfo$refresh_criteria_counter + 1
     }
     
+    
   }
+  )
+  
+  observeEvent(
+    input$delete_criteria_by_type,
+    {
+      print("delete criteria by type")
+      df_sel_crit <- sessionInfo$df_trial_criteria_for_type[input$trial_crit_by_type_rows_selected,]
+      print(df_sel_crit)
+      del_crit_sql <- "delete from trial_criteria where nct_id = ? and criteria_type_id = ?"
+      
+      shinyalert("Confirm delete", "Delete the selected criteria?" , 
+                 type = "warning", showCancelButton = TRUE, showConfirmButton = TRUE, confirmButtonText = "Delete",
+                 callbackR = function(x) {
+                   if (x == TRUE) {
+                       scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+                      rs <- dbExecute(scon, del_crit_sql, 
+                              params = c(df_sel_crit$nct_id, df_sel_crit$criteria_type_id))
+                      DBI::dbDisconnect(scon)
+                      sessionInfo$refresh_criteria_counter <- sessionInfo$refresh_criteria_counter + 1
+                   }
+                 }
+      )
+    }
   )
   
   # observeEvent(

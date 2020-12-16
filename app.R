@@ -28,6 +28,8 @@ library(shinyalert)
 
 library(parsedate)
 
+source('eval_prior_therapy_app.R')
+source('check_if_any.R')
 dbinfo <- config::get()
 
 ui <- secure_app(
@@ -1055,7 +1057,17 @@ where tc.nct_id = ?"
   # Test the criteria in the environment 
   observeEvent(input$criteria_test_eval, {
     print("testing criteria")
-    createAlert(session, 'criteria_modal_alert', title = "Criteria Test", content = "Criteria Expression Valid")
+    patient_data_env <- new.env(size = 200L)
+    eval(parse(text = "C2926 <- 'YES'"), envir = patient_data_env)
+    csv_codes <- "'C2926'"
+    print(csv_codes)
+    session_conn = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+    
+    results <- eval_prior_therapy_app(csv_codes, input$criteria_per_trial_expression , session_conn,
+                           eval_env =
+                             patient_data_env)
+    DBI::dbDisconnect(session_conn)
+    createAlert(session, 'criteria_modal_alert', title = "Criteria Test", content = results)
     
   })
   

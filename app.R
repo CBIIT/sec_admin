@@ -26,6 +26,8 @@ library(shinyFeedback)
 library(keyring)
 library(shinyalert)
 
+library(parsedate)
+
 dbinfo <- config::get()
 
 ui <- secure_app(
@@ -170,9 +172,11 @@ ui <- secure_app(
        , 
        fluidRow(
          column(1, alight='right', actionButton("criteria_test_eval", label = "Test Expression")),
-         column(1, align = 'right',  offset = 10,actionButton("criteria_save", label='Save'))
+         column(2, align = 'right',  offset = 9,actionButton("criteria_save", label='Save and Close'))
        )
-      )
+      ),
+      
+      tags$head(tags$style("#add_criteria_per_trial_bsmodal .modal-footer{ display:none}"))
     ),
     
     tabsetPanel(
@@ -259,7 +263,8 @@ server <- function(input, output, session) {
     result_auth = NA,
     refresh_criteria_types_counter = 0,
     refresh_criteria_counter = 0,
-    df_crit_types = NA
+    df_crit_types = NA,
+    df_crit_type_titles = NA
   )
   
   sessionInfo$result_auth <-
@@ -319,38 +324,46 @@ server <- function(input, output, session) {
   crit_type_titles_sql <-
     "select criteria_type_id,  criteria_type_title
      from criteria_types order by criteria_type_id"
-  df_crit_type_titles <- dbGetQuery(con, crit_type_titles_sql)
   
-  updateSelectizeInput(session,
-                       'criteria_type_typer',
-                       choices = df_crit_type_titles$criteria_type_title ,
-                       server = TRUE)
-  
-  criteria_types_titles_dt <- datatable(
-    df_crit_type_titles,
-    class = 'cell-border stripe compact wrap hover',
-    selection = 'single',
-    colnames = c('Type ID',
-                 'Title'),
-    options = list(
-      escape = FALSE,
-      searching = FALSE,
-      paging = FALSE,
-      info = FALSE,
-      columnDefs = list(# Initially hidden columns
-        list(
-          visible = FALSE,
-          
-          targets = c(0, 1)
-        ))
+  observe({
+    scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+    
+    sessionInfo$df_crit_type_titles <- dbGetQuery(scon, crit_type_titles_sql)
+    DBI::dbDisconnect(scon)
+    
+    updateSelectizeInput(
+      session,
+      'criteria_type_typer',
+      choices = sessionInfo$df_crit_type_titles$criteria_type_title ,
+      server = TRUE
     )
-  )
-  
-  output$criteria_types_title_only <-
-    DT::renderDataTable({
-      criteria_types_titles_dt
-    })
-  
+    
+    criteria_types_titles_dt <- datatable(
+      sessionInfo$df_crit_type_titles,
+      class = 'cell-border stripe compact wrap hover',
+      selection = 'single',
+      colnames = c('Type ID',
+                   'Title'),
+      options = list(
+        escape = FALSE,
+        searching = FALSE,
+        paging = FALSE,
+        info = FALSE,
+        columnDefs = list(# Initially hidden columns
+          list(
+            visible = FALSE,
+            
+            targets = c(0, 1)
+          ))
+      )
+    )
+    
+    output$criteria_types_title_only <-
+      DT::renderDataTable({
+        criteria_types_titles_dt
+      })
+    
+  })
   
   
   
@@ -616,6 +629,7 @@ server <- function(input, output, session) {
       print("need to refresh criteria types")
       scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
       sessionInfo$df_crit_types <- dbGetQuery(scon, crit_type_sql)
+      sessionInfo$df_crit_type_titles <- dbGetQuery(scon, crit_type_titles_sql)
       DBI::dbDisconnect(scon)
       
     })
@@ -629,6 +643,10 @@ server <- function(input, output, session) {
                {
                  print("criteria  modal closed")
                  sessionInfo$criteria_modal_state <- "Neutral"
+                 shinyBS::closeAlert(session, "criteria_need_nct_id_alert")
+                 shinyBS::closeAlert(session, "criteria_per_trial_refined_text_alert")
+                 shinyBS::closeAlert(session, "criteria_per_trial_expression_alert")
+                 
                  
                })
   
@@ -652,7 +670,7 @@ server <- function(input, output, session) {
   # Row selected in trial criteria by type table
   #
   
-  observeEvent(input$criteria_types_title_only_rows_selected,
+  observeEvent(input$criteria_types_title_only_rows_selected | sessionInfo$refresh_criteria_counter,
                {
                  print("criteria types row selected ")
                  print(input$criteria_types_title_only_rows_selected)
@@ -663,7 +681,7 @@ server <- function(input, output, session) {
                    
                    print(paste("user is ", sessionInfo$result_auth$user))
                    crit_type_sel <-
-                     df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
+                     sessionInfo$df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
                    trial_criteria_for_type_sql <-
                      "select nct_id, criteria_type_id, trial_criteria_orig_text,
                                    trial_criteria_refined_text, trial_criteria_expression, update_date, update_by
@@ -792,16 +810,16 @@ where tc.nct_id = ?"
     print("Add criteria per trial")
     if(sessionInfo$criteria_modal_state == 'AddByType') {
       updateSelectizeInput(session, 'criteria_type_typer', 
-                           selected=  df_crit_type_titles$criteria_type_title[[input$criteria_types_title_only_rows_selected]])
-      sessionInfo$criteria_type_id <- df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
+                           selected=  sessionInfo$df_crit_type_titles$criteria_type_title[[input$criteria_types_title_only_rows_selected]])
+      sessionInfo$criteria_type_id <- sessionInfo$df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
       updateTextInput(session, 'criteria_per_trial_nct_id', value = '')
       updateTextAreaInput(session, 'criteria_per_trial_refined_text', value = '')
       updateTextAreaInput(session, 'criteria_per_trial_expression', value = '')
       updateTextAreaInput(session, 'criteria_per_trial_original_text', value = '')
     } else if (sessionInfo$criteria_modal_state == 'EditByType') {
       updateSelectizeInput(session, 'criteria_type_typer', 
-                           selected=  df_crit_type_titles$criteria_type_title[[input$criteria_types_title_only_rows_selected]])
-      sessionInfo$criteria_type_id <- df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
+                           selected=  sessionInfo$df_crit_type_titles$criteria_type_title[[input$criteria_types_title_only_rows_selected]])
+      sessionInfo$criteria_type_id <-  sessionInfo$df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
       #
       # Now get the items from the criteria table
       #
@@ -892,11 +910,89 @@ where tc.nct_id = ?"
     
   })
   
+  #
+  # Save an individual criteria 
+  #
+  
   observeEvent(input$criteria_save, {
+    
     print("criteria save button")
     print(paste("state  = ", sessionInfo$criteria_modal_state))
+    
+    input_error_crit <- FALSE
+    if (input$criteria_per_trial_nct_id == '') {
+      createAlert(session, 'criteria_modal_alert', 
+                  alertId = "criteria_need_nct_id_alert", content = "Please enter a NCT ID", style = 'danger')
+      input_error_crit <- TRUE 
+    } else {
+      shinyBS::closeAlert(session, "criteria_need_nct_id_alert")
+    }
+    if (input$criteria_per_trial_refined_text == '') {
+      createAlert(session, 'criteria_modal_alert', 
+                  alertId = "criteria_per_trial_refined_text_alert", content = "Please enter the refined text", style = 'danger')
+      input_error_crit <- TRUE 
+    } else {
+      shinyBS::closeAlert(session, "criteria_per_trial_refined_text_alert")
+    }
+    if (input$criteria_per_trial_expression == '') {
+      createAlert(session, 'criteria_modal_alert', 
+                  alertId = "criteria_per_trial_expression_alert", content = "Please enter the expression", style = 'danger')
+      input_error_crit <- TRUE 
+    } else {
+      shinyBS::closeAlert(session, "criteria_per_trial_expression_alert")
+    }
+    if (input_error_crit == TRUE) {
+      print("error on criteria dialog - bailing out ")
+      return
+    }
+   
+    
+    insert_crit_sql <- "insert into trial_criteria(nct_id, criteria_type_id, trial_criteria_orig_text,trial_criteria_refined_text,
+        trial_criteria_expression, update_date, update_by) values(?,?,?,?,?,?,?)"
+    type_row_df <- sessionInfo$df_crit_type_titles[sessionInfo$df_crit_type_titles$criteria_type_title == input$criteria_type_typer,]
+    
+    if(sessionInfo$criteria_modal_state == "AddByType" && input_error_crit == FALSE ) {
+     # browser()
+      # Need to insert a new record from the add by type path
+    
+
+      scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+      rs <- dbExecute(scon, insert_crit_sql, 
+                      params = c(input$criteria_per_trial_nct_id, type_row_df$criteria_type_id, 
+                                 input$criteria_per_trial_original_text,input$criteria_per_trial_refined_text,
+                                 input$criteria_per_trial_expression, format_iso_8601(Sys.time()),
+                                 sessionInfo$result_auth$user))
+      print(rs)
+      DBI::dbDisconnect(scon)
+      #sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
+      # save was successful, and close the panel and clear the fields
+      toggleModal(session,  "add_criteria_per_trial_bsmodal", toggle = "close")
+      sessionInfo$refresh_criteria_counter <- sessionInfo$refresh_criteria_counter + 1
+    }
+    
   }
   )
+  
+  # observeEvent(
+  #   sessionInfo$refresh_criteria_counter,
+  #   {
+  #     if(sessionInfo$refresh_criteria_counter > 0 ) {
+  #       print("refreshing criteria")
+  #       crit_type_sel <-
+  #         sessionInfo$df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
+  #       trial_criteria_for_type_sql <-
+  #         "select nct_id, criteria_type_id, trial_criteria_orig_text,
+  #                                  trial_criteria_refined_text, trial_criteria_expression, update_date, update_by
+  #                               from trial_criteria where criteria_type_id = ? order by nct_id"
+  #       sessionCon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+  #       sessionInfo$df_trial_criteria_for_type <-
+  #         dbGetQuery(sessionCon,
+  #                    trial_criteria_for_type_sql,
+  #                    params = c(crit_type_sel))
+  #       DBI::dbDisconnect(sessionCon)
+  #     }
+  #   }
+  # )
   #-------------------------
   
   #

@@ -24,7 +24,7 @@ library(sjmisc)
 library(lubridate)
 library(shinyFeedback)
 library(keyring)
-
+library(shinyalert)
 
 dbinfo <- config::get()
 
@@ -32,6 +32,7 @@ ui <- secure_app(
   fluidPage(
     useShinyjs(),
     useShinyFeedback(),
+    useShinyalert(),
     
     #
     # Wire up the close button on the bsmodals to fire a shiny event 
@@ -76,7 +77,7 @@ ui <- secure_app(
     
     bsModal(
       "add_criteria_type_bsmodal",
-      "Add criteria type",
+      "Add /Edit criteria type",
       "add_criteria_type",
       size = "large",
       fluidPage(
@@ -104,9 +105,10 @@ ui <- secure_app(
         )
         ,
         fluidRow(
-          column(1, align = 'right',  offset = 11,actionButton("criteria_type_save", label='Save'))
+          column(2, align = 'right',  offset = 10,actionButton("criteria_type_save", label='Save and Close'))
         )
-      )
+      ),
+      tags$head(tags$style("#add_criteria_type_bsmodal .modal-footer{ display:none}"))
     ),
     bsModal(
       "add_criteria_per_trial_bsmodal",
@@ -287,29 +289,33 @@ server <- function(input, output, session) {
     "select criteria_type_id, criteria_type_code, criteria_type_title, criteria_type_desc, criteria_type_active, criteria_type_sense
      from criteria_types order by criteria_type_id"
  
-  observe( {
+  ## 
+  ## Observe for refetching the new criteria types when they have changed.
+  ##
+  
+  observe({
     scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
     sessionInfo$df_crit_types <- dbGetQuery(scon, crit_type_sql)
     DBI::dbDisconnect(scon)
     
-  criteria_types_dt <- datatable(
-    sessionInfo$df_crit_types,
-    class = 'cell-border stripe compact wrap hover',
-    selection = 'single',
-    colnames = c('Type ID',
-                 'Abbr',
-                 'Title',
-                 'Description',
-                 'Active',
-                 'Inc/Exc')
-  )
+    criteria_types_dt <- datatable(
+      sessionInfo$df_crit_types,
+      class = 'cell-border stripe compact wrap hover',
+      selection = 'single',
+      colnames = c('Type ID',
+                   'Abbr',
+                   'Title',
+                   'Description',
+                   'Active',
+                   'Inc/Exc')
+    )
+    
+    output$criteria_types_table <-
+      DT::renderDataTable({
+        criteria_types_dt
+      })
+  })
   
-  output$criteria_types_table <-
-    DT::renderDataTable({
-      criteria_types_dt
-    })
-}
-)
   crit_type_titles_sql <-
     "select criteria_type_id,  criteria_type_title
      from criteria_types order by criteria_type_id"
@@ -413,8 +419,8 @@ server <- function(input, output, session) {
       #
       if(sessionInfo$criteria_type_modal_state == "Edit" &&  (!is.null(input$criteria_types_table_rows_selected)) )  {
         print(paste("selected row is ", input$criteria_types_table_rows_selected))
-        print(paste("editing  ", df_crit_types[input$criteria_types_table_rows_selected,]))
-        rowdf <- df_crit_types[input$criteria_types_table_rows_selected,]
+        print(paste("editing  ", sessionInfo$df_crit_types[input$criteria_types_table_rows_selected,]))
+        rowdf <- sessionInfo$df_crit_types[input$criteria_types_table_rows_selected,]
         updateTextInput(session, 'criteria_type_code', value = rowdf$criteria_type_code)
         updateTextInput(session, 'criteria_type_title', value = rowdf$criteria_type_title)
         updateTextInput(session, 'criteria_type_desc', value = rowdf$criteria_type_desc)
@@ -442,6 +448,63 @@ server <- function(input, output, session) {
     input$delete_criteria_type,
     {
       print("delete criteria type clicked")
+      #
+      # See if there are criteria for this type.  If not, delete it without prompt.  If so, 
+      # make sure this is what the user really wants to do.
+      #
+      if (!is.null(input$criteria_types_table_rows_selected)) {
+        num_crits_sql <- "select count(*) as num_recs from trial_criteria where criteria_type_id = ?"
+        rowdf <- sessionInfo$df_crit_types[input$criteria_types_table_rows_selected,]
+        sessionInfo$criteria_type_modal_type_id <- rowdf$criteria_type_id  
+        print(paste("delete - checking num recs for ",sessionInfo$criteria_type_modal_type_id))
+        scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+        
+        num_crits <- dbGetQuery(scon, num_crits_sql, 
+                        params = c( sessionInfo$criteria_type_modal_type_id)) 
+        DBI::dbDisconnect(scon)
+        print(paste("there are ", num_crits$num_recs , " records "))
+        if (num_crits$num_recs == 0 ) {
+          message_str <- paste("Do you want to delete the ", rowdf$criteria_type_title, " criteria type?")
+        } else {
+          message_str <- paste("The", rowdf$criteria_type_title, " criteria type has ", num_crits$num_recs, " criteria records - deleting this type will delete those records as well.  Are you sure?")
+        }
+        shinyalert("Confirm delete", message_str , 
+                   type = "warning", showCancelButton = TRUE, showConfirmButton = TRUE, confirmButtonText = "Delete",
+                   callbackR = function(x) {
+                     if (x == TRUE) {
+                       if ( num_crits$num_recs == 0) {
+                        print("we need to delete ")
+                        scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+                        rs <- dbExecute(scon, "delete from criteria_types where criteria_type_id = ? ", 
+                                        params = c(sessionInfo$criteria_type_modal_type_id) )
+                        DBI::dbDisconnect(scon)
+                        sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
+
+                         
+                       } else {
+                         shinyalert("Are you really sure?", 
+                                    paste("Are you really sure you want to delete the criteria type of ",rowdf$criteria_type_title, " with ",num_crits$num_recs, " criteria records? "),
+                         type = "warning", showCancelButton = TRUE, showConfirmButton = TRUE, confirmButtonText = "Delete",
+                         callbackR = function(x) {
+                           if (x == TRUE) {
+                             print("second confirm of delete")
+                             scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+                             rs <- dbExecute(scon, "delete from trial_criteria where criteria_type_id = ? ", 
+                                             params = c(sessionInfo$criteria_type_modal_type_id) )
+                             rs <- dbExecute(scon, "delete from criteria_types where criteria_type_id = ? ", 
+                                             params = c(sessionInfo$criteria_type_modal_type_id) )
+                             DBI::dbDisconnect(scon)
+                             sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
+                           }
+                         })
+                       }
+                     } else {
+                       print('No delete')
+                     }
+                   })
+        
+        
+      }
     }
     )
   # 
@@ -468,8 +531,8 @@ server <- function(input, output, session) {
                {
                  print("criteria type modal closed")
                  sessionInfo$criteria_type_modal_state <- "Neutral"
-                 closeAlert(session, "criteria_type_code_alert")
-                 closeAlert(session, "criteria_type_title_alert")
+                 shinyBS::closeAlert(session, "criteria_type_code_alert")
+                 shinyBS::closeAlert(session, "criteria_type_title_alert")
                })
   
   
@@ -490,7 +553,7 @@ server <- function(input, output, session) {
                     alertId = "criteria_type_code_alert", content = "Please enter a criteria code", style = 'danger')
         input_error <- TRUE
       } else {
-        closeAlert(session, "criteria_type_code_alert")
+        shinyBS::closeAlert(session, "criteria_type_code_alert")
       }
       
       if (input$criteria_type_title == '') {
@@ -498,7 +561,7 @@ server <- function(input, output, session) {
                     alertId = "criteria_type_title_alert", content = "Please enter a title", style = 'danger')
         input_error <- TRUE 
       } else {
-        closeAlert(session, "criteria_type_title_alert")
+        shinyBS::closeAlert(session, "criteria_type_title_alert")
       }
       
       if (input$criteria_type_desc == '') {
@@ -506,14 +569,15 @@ server <- function(input, output, session) {
                     alertId = "criteria_type_desc_alert", content = "Please enter a description", style = 'danger')
         input_error <- TRUE 
       } else {
-        closeAlert(session, "criteria_type_desc_alert")
+        shinyBS::closeAlert(session, "criteria_type_desc_alert")
       }
       
       if(input_error) {
+        print("input error, returning")
         return
       }
       
-      if (sessionInfo$criteria_type_modal_state == 'Neutral') {
+      if (sessionInfo$criteria_type_modal_state == 'Neutral' && input_error == FALSE) {
         # insert
         print("criteria type need to do an insert")
         ct_insert <- "insert into criteria_types(criteria_type_code, criteria_type_title, criteria_type_desc,
@@ -525,10 +589,23 @@ server <- function(input, output, session) {
         print(rs)
         DBI::dbDisconnect(scon)
         sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
+        # save was successful, and close the panel and clear the fields
+        toggleModal(session,  "add_criteria_type_bsmodal", toggle = "close")
         
-        
-      } else {
+      } else if (input_error == FALSE ) {
         print("criteria type need to do an update")
+        print(paste("need to update type ", sessionInfo$criteria_type_modal_type_id))
+        ct_update_sql <- "update criteria_types set criteria_type_code = ?, criteria_type_title = ?, 
+        criteria_type_desc = ?, criteria_type_active = ?, criteria_type_sense = ? where criteria_type_id = ?"
+        scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+        
+        rs <- dbExecute(scon, ct_update_sql, 
+                        params = c(input$criteria_type_code,input$criteria_type_title,input$criteria_type_desc, 
+                                   input$criteria_type_active_rb, input$criteria_type_sense_rb, sessionInfo$criteria_type_modal_type_id)) 
+        DBI::dbDisconnect(scon)
+        sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
+        # save was successful, and close the panel and clear the fields
+        toggleModal(session,  "add_criteria_type_bsmodal", toggle = "close")
       }
     }
   )

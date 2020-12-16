@@ -211,17 +211,15 @@ ui <- secure_app(
             br(),
             br(),
             fileInput("trial_criteria_csv_file", "Upload CSV File",
-                      accept = c(
-                        "text/csv",
-                        "text/comma-separated-values,text/plain",
-                        ".csv")
+                      accept = ".csv"
             )
             
           ),
           mainPanel(DTOutput("trial_crit_by_type"))
         )
         
-      ),
+      )      
+      ,
       #end of trial criteria per type
       tabPanel("Criteria Per Trial",
                sidebarLayout(
@@ -1060,6 +1058,75 @@ where tc.nct_id = ?"
     createAlert(session, 'criteria_modal_alert', title = "Criteria Test", content = "Criteria Expression Valid")
     
   })
+  
+  # csv input 
+  observeEvent(
+    input$trial_criteria_csv_file,
+    {
+      print(paste('csv file upload -- ',input$trial_criteria_csv_file$datapath )) 
+      file <- input$trial_criteria_csv_file
+      ext <- tools::file_ext(file$datapath)
+      print(ext)
+      if( ext != 'csv') {
+        shinyalert("Upload error", "Please upload a .csv file" , 
+                   type = "error")
+      } else {
+        # We have a .csv file, see if it has the correct info in it.
+        new_crits_from_csv_df <-  read.csv(input$trial_criteria_csv_file$datapath, header = TRUE)
+        print(new_crits_from_csv_df)
+        file_col_names <- names(new_crits_from_csv_df)
+        print(file_col_names)
+        # See if we have the correct column names 
+        mandated_columns <- c('criteria_type_id', 'nct_id', 'trial_criteria_orig_text','trial_criteria_refined_text', 'trial_criteria_expression')
+        if (sum (mandated_columns == file_col_names) != 5) {
+          shinyalert("Upload error", "The .csv file should contain these columns: criteria_type_id,nct_id,trial_criteria_orig_text,
+                     trial_criteria_refined_text,trial_criteria_expression" , 
+                     type = "error")
+        } else {
+          #
+          # we have all the correct columns in the file
+          # create the dataframe for the data append
+          #
+
+          new_crits_df <- new_crits_from_csv_df[, mandated_columns]
+          new_crits_df$update_date<- format_iso_8601(Sys.time())
+          new_crits_df$update_by <- sessionInfo$result_auth$user
+          #
+          # Now check that we have a nct_id and criteria_type_id for each row
+          #
+          if (sum(new_crits_df$nct_id != "") != nrow(new_crits_df)) {
+            shinyalert("Upload error", "The nct_id column is blank for at least one row in the csv file.  Please fix this and upload the file again" , 
+                       type = "error")
+          } else if (sum(!is.na(new_crits_df$criteria_type_id)) != nrow(new_crits_df)) {
+            shinyalert("Upload error", "The criteria_type_id column is blank for at least one row in the csv file.  Please fix this and upload the file again" , 
+                       type = "error")
+          } else {
+            # Now actually do the upload
+            sessionCon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+            tryCatch( {
+            ret <- dbWriteTable(sessionCon, 'trial_criteria', new_crits_df, overwrite = FALSE, append = TRUE)
+            }, warning = function(w) {
+              print("warning")
+              shinyalert("Upload warning", paste("The following warning occurred : ", w) , 
+                         type = "warning")
+              print(w)
+            }, error = function(e) {
+              print("error")
+              print(e)
+              shinyalert("Upload error", paste("The following error occurred : ", e) , 
+                         type = "error")
+            }
+            )
+            DBI::dbDisconnect(sessionCon)
+            sessionInfo$refresh_criteria_counter <- sessionInfo$refresh_criteria_counter + 1
+            
+            
+          }
+        }
+      
+      }
+      
+    })
 }
 
 

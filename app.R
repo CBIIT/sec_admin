@@ -1105,6 +1105,8 @@ where tc.nct_id = ?"
             sessionCon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
             tryCatch( {
             ret <- dbWriteTable(sessionCon, 'trial_criteria', new_crits_df, overwrite = FALSE, append = TRUE)
+            shinyalert("Upload successful", "The CSV upload was successful" , 
+                       type = "success")
             }, warning = function(w) {
               print("warning")
               shinyalert("Upload warning", paste("The following warning occurred : ", w) , 
@@ -1116,6 +1118,7 @@ where tc.nct_id = ?"
               shinyalert("Upload error", paste("The following error occurred : ", e) , 
                          type = "error")
             }
+            
             )
             DBI::dbDisconnect(sessionCon)
             sessionInfo$refresh_criteria_counter <- sessionInfo$refresh_criteria_counter + 1

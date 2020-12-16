@@ -1,0 +1,9 @@
+transform_prior_therapy  <- function(therapy_string, csv_codes) {
+  new_string <- gsub(
+    "check_if_any\\(",
+    paste("check_if_any(\"", csv_codes, "\",session_conn
+          ,  "),
+    therapy_string
+  )
+  return(new_string)
+}

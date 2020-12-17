@@ -1115,6 +1115,10 @@ where tc.nct_id = ?"
           } else {
             # Now actually do the upload
             sessionCon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+            
+            # Turn on fk enforcement for this connection.
+            
+            rs <- dbExecute(sessionCon,'PRAGMA foreign_keys = ON')
             tryCatch( {
             ret <- dbWriteTable(sessionCon, 'trial_criteria', new_crits_df, overwrite = FALSE, append = TRUE)
             shinyalert("Upload successful", "The CSV upload was successful" , 

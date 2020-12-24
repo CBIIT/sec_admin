@@ -285,7 +285,7 @@ server <- function(input, output, session) {
   
   
   
-  con = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+ # con = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
   
   #
   # Select the criteria types
@@ -372,8 +372,11 @@ server <- function(input, output, session) {
   
   ## HH you are here -- wrap in observer in case nct_ids change 
   observe( {
+    scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+    
    
-    sessionInfo$df_criteria_nct_id <- dbGetQuery(con, criteria_nct_ids_sql)
+    sessionInfo$df_criteria_nct_id <- dbGetQuery(scon, criteria_nct_ids_sql)
+    DBI::dbDisconnect(scon)
     
     criteria_nct_ids_dt <- datatable(
       sessionInfo$df_criteria_nct_id,
@@ -402,7 +405,6 @@ server <- function(input, output, session) {
         criteria_nct_ids_dt
       })
     
-    DBI::dbDisconnect(con)
   }
   )
   

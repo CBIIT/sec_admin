@@ -73,7 +73,9 @@ ui <- secure_app(
                       ')
     )),
     # classic app
-    headerPanel(h3('SEC POC Administration')),
+
+    titlePanel(title = h4('SEC POC Administration'), 
+               windowTitle = "SEC POC Administration"),
     
     # 
     # Criteria Type Modal

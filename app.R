@@ -102,11 +102,14 @@ ui <- secure_app(
         ,
         fluidRow(
           column(
-            6, radioButtons("criteria_type_active_rb","Active", choices = c("Y" = "Y", "N" = "N"), inline = TRUE)
+            4, radioButtons("criteria_type_active_rb","Active", choices = c("Y" = "Y", "N" = "N"), inline = TRUE)
           )
           ,
           column(
-            6, radioButtons("criteria_type_sense_rb","Active", choices = c("Inclusion" = "Inclusion", "Exclusion" = "Exclusion"), inline = TRUE)
+            4, radioButtons("criteria_type_sense_rb","Active", choices = c("Inclusion" = "Inclusion", "Exclusion" = "Exclusion"), inline = TRUE)
+          ),
+          column(
+            4, numericInput('criteria_column_index','Col index', NULL)
           )
         )
         ,
@@ -294,8 +297,9 @@ server <- function(input, output, session) {
   #
   
   crit_type_sql <-
-    "select criteria_type_id, criteria_type_code, criteria_type_title, criteria_type_desc, criteria_type_active, criteria_type_sense
-     from criteria_types order by criteria_type_id"
+    "select criteria_type_id, criteria_type_code, criteria_type_title, criteria_type_desc, criteria_type_active, 
+    criteria_type_sense, criteria_column_index 
+     from criteria_types order by criteria_column_index"
   
   criteria_nct_ids_sql <-
     "select distinct nct_id from trial_criteria order by nct_id"
@@ -318,7 +322,8 @@ server <- function(input, output, session) {
                    'Title',
                    'Description',
                    'Active',
-                   'Inc/Exc')
+                   'Inc/Exc',
+                   'Column')
     )
     
     output$criteria_types_table <-
@@ -448,6 +453,7 @@ server <- function(input, output, session) {
         updateTextInput(session, 'criteria_type_desc', value = rowdf$criteria_type_desc)
         updateRadioButtons(session, 'criteria_type_active_rb', selected = rowdf$criteria_type_active)
         updateRadioButtons(session, 'criteria_type_sense_rb', selected = rowdf$criteria_type_sense)
+        updateNumericInput(session, 'criteria_column_index', value=rowdf$criteria_column_index)
         sessionInfo$criteria_type_modal_type_id <- rowdf$criteria_type_id  # Stick this in the reactive values to use in the update statement.
         #tags$script(HTML(
         #  "$('#add_criteria_type_bsmodal-modal-title').val('Edit Criteria Type');"
@@ -458,6 +464,7 @@ server <- function(input, output, session) {
         updateTextInput(session, 'criteria_type_desc', value = '')
         updateRadioButtons(session, 'criteria_type_active_rb', selected = 'N')
         updateRadioButtons(session, 'criteria_type_sense_rb', selected = 'Inclusion')
+        updateNumericInput(session, 'criteria_column_index', value = NA)
         sessionInfo$criteria_type_modal_type_id <- NA
         
       }
@@ -593,7 +600,14 @@ server <- function(input, output, session) {
       } else {
         shinyBS::closeAlert(session, "criteria_type_desc_alert")
       }
-      
+      #browser()
+      if (is.na(input$criteria_column_index)) {
+        createAlert(session, 'criteria_type_modal_alert', 
+                    alertId = "criteria_type_col_index_alert", content = "Please enter a column index", style = 'danger')
+        input_error <- TRUE 
+      } else {
+        shinyBS::closeAlert(session, "criteria_type_col_index_alert")
+      }
       if(input_error) {
         print("input error, returning")
         return
@@ -603,11 +617,11 @@ server <- function(input, output, session) {
         # insert
         print("criteria type need to do an insert")
         ct_insert <- "insert into criteria_types(criteria_type_code, criteria_type_title, criteria_type_desc,
-        criteria_type_active, criteria_type_sense) values (?,?,?,?,?)"
+        criteria_type_active, criteria_type_sense,criteria_column_index) values (?,?,?,?,?,?)"
         scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
         rs <- dbExecute(scon, ct_insert, 
                            params = c(input$criteria_type_code,input$criteria_type_title,input$criteria_type_desc, 
-                                      input$criteria_type_active_rb, input$criteria_type_sense_rb))
+                                      input$criteria_type_active_rb, input$criteria_type_sense_rb, input$criteria_column_index))
         print(rs)
         DBI::dbDisconnect(scon)
         sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
@@ -618,12 +632,13 @@ server <- function(input, output, session) {
         print("criteria type need to do an update")
         print(paste("need to update type ", sessionInfo$criteria_type_modal_type_id))
         ct_update_sql <- "update criteria_types set criteria_type_code = ?, criteria_type_title = ?, 
-        criteria_type_desc = ?, criteria_type_active = ?, criteria_type_sense = ? where criteria_type_id = ?"
+        criteria_type_desc = ?, criteria_type_active = ?, criteria_type_sense = ? , criteria_column_index = ? where criteria_type_id = ?"
         scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
         
         rs <- dbExecute(scon, ct_update_sql, 
                         params = c(input$criteria_type_code,input$criteria_type_title,input$criteria_type_desc, 
-                                   input$criteria_type_active_rb, input$criteria_type_sense_rb, sessionInfo$criteria_type_modal_type_id)) 
+                                   input$criteria_type_active_rb, input$criteria_type_sense_rb,input$criteria_column_index,
+                                   sessionInfo$criteria_type_modal_type_id)) 
         DBI::dbDisconnect(scon)
         sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
         # save was successful, and close the panel and clear the fields

@@ -1,0 +1,4 @@
+default:
+    db_file_location : Location of sqlite app database file
+    db_user_file: location of sqlite authentication database file 
+    passphrase: passphrase of sqlite authentication database file 

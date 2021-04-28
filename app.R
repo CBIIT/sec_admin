@@ -248,7 +248,7 @@ ui <- secure_app(
                   DTOutput('crit_with_cands_count')
                 ),
                 mainPanel(
-                  "  "
+                  DTOutput("crit_with_cands_for_type")
                 )
               )
                )
@@ -283,7 +283,8 @@ server <- function(input, output, session) {
     df_crit_types = NA,
     df_crit_type_titles = NA,
     df_criteria_nct_id = NA,
-    df_crit_with_cands_count = NA
+    df_crit_with_cands_count = NA,
+    df_crit_with_cands_for_type = NA
   )
   
   sessionInfo$result_auth <-
@@ -358,10 +359,62 @@ observe({
 })
 
 
-observeEvent(input$crit_with_cands_count_rows_selected,{
+observeEvent(input$crit_with_cands_count_rows_selected, {
   print("crit with cands type selected")
-}
-)
+  
+  if (!is.null(input$crit_with_cands_count_rows_selected)) {
+    select_cands_sql <- "
+  SELECT cc.nct_id, cc.criteria_type_id,
+case
+  when cc.inclusion_indicator = 1 then 'Inclusion: ' || cc.candidate_criteria_text
+  when cc.inclusion_indicator = 0 then 'Exclusion: ' || cc.candidate_criteria_text
+end cand_crit_text
+
+from candidate_criteria cc
+join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
+where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' ) and cc.criteria_type_id = $1
+order by cc.nct_id, cc.criteria_type_id "
+    print(sessionInfo$df_crit_with_cands_count[input$crit_with_cands_count_rows_selected,]$criteria_type_id)
+    
+    scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+    sessionInfo$df_crit_with_cands_for_type <- dbGetQuery(scon, select_cands_sql,
+                                                       params = c(sessionInfo$df_crit_with_cands_count[input$crit_with_cands_count_rows_selected,]$criteria_type_id) )
+    DBI::dbDisconnect(scon)
+    
+    sessionInfo$df_crit_with_cands_for_type <- aggregate(data=sessionInfo$df_crit_with_cands_for_type, cand_crit_text~nct_id+criteria_type_id, FUN=paste )
+    
+    crit_with_cands_for_type_dt <-
+      datatable(
+        sessionInfo$df_crit_with_cands_for_type,
+        class = 'cell-border stripe compact wrap hover',
+        selection = 'single',
+        width  = "90vw",
+        colnames = c(
+          'NCT ID',
+          'Type ID',
+          'Candidate Original Text'
+          
+        ),
+        options = list(
+          info = TRUE,
+          searching = TRUE,
+          autoWidth = TRUE,
+          scrollX = TRUE,
+          deferRender = TRUE,
+          scrollY = "45vh",
+          scrollCollapse = TRUE,
+          paging = TRUE,
+          style = "overflow-y: scroll"
+        )
+      )
+    output$crit_with_cands_for_type <-
+      DT::renderDataTable({
+        crit_with_cands_for_type_dt
+      })
+    
+  }
+})
              
   ## 
   ## Observe for refetching the new criteria types when they have changed.

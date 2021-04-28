@@ -241,6 +241,18 @@ ui <- secure_app(
                  ),
                  mainPanel(DTOutput("trial_crit_per_trial"))
                ))
+      ,
+      tabPanel("Trials with Candidate Criteria",
+              sidebarLayout(
+                sidebarPanel(
+                  DTOutput('crit_with_cands_count')
+                ),
+                mainPanel(
+                  "  "
+                )
+              )
+               )
+      
       
     )
   )
@@ -270,7 +282,8 @@ server <- function(input, output, session) {
     refresh_criteria_counter = 0,
     df_crit_types = NA,
     df_crit_type_titles = NA,
-    df_criteria_nct_id = NA
+    df_criteria_nct_id = NA,
+    df_crit_with_cands_count = NA
   )
   
   sessionInfo$result_auth <-
@@ -303,7 +316,53 @@ server <- function(input, output, session) {
   
   criteria_nct_ids_sql <-
     "select distinct nct_id from trial_criteria order by nct_id"
+  
+  crit_with_cands_count_sql <- 
+    "with cand_crit_count as (
+select  criteria_type_id , count(criteria_type_id) as crit_count from candidate_criteria
+group by criteria_type_id
+)
+select ct.criteria_type_id, ct.criteria_type_title, ccc.crit_count
+from criteria_types ct join cand_crit_count ccc on ct.criteria_type_id = ccc.criteria_type_id"
  
+
+observe({
+  scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+  sessionInfo$df_crit_with_cands_count <- dbGetQuery(scon, crit_with_cands_count_sql)
+  DBI::dbDisconnect(scon)
+  crit_with_cands_count_dt <- datatable(
+    sessionInfo$df_crit_with_cands_count,
+    class = 'cell-border stripe compact wrap hover',
+    selection = 'single',
+    colnames = c('Type ID',
+                 'Title',
+                 'Num Cand Crit'),
+    options = list(
+      escape = FALSE,
+      searching = FALSE,
+      paging = FALSE,
+      info = FALSE,
+      columnDefs = list(# Initially hidden columns
+        list(
+          visible = FALSE,
+          
+          targets = c(0, 1)
+        ))
+    )
+  )
+  
+  output$crit_with_cands_count <-
+    DT::renderDataTable({
+      crit_with_cands_count_dt
+    })
+})
+
+
+observeEvent(input$crit_with_cands_count_rows_selected,{
+  print("crit with cands type selected")
+}
+)
+             
   ## 
   ## Observe for refetching the new criteria types when they have changed.
   ##

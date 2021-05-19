@@ -245,14 +245,28 @@ ui <- secure_app(
       tabPanel("Trials with Candidate Criteria",
               sidebarLayout(
                 sidebarPanel(
-                  DTOutput('crit_with_cands_count')
+                  DTOutput('crit_with_cands_count'),
+                  br(),
+                  actionButton("add_cand_criteria_per_trial", "Add", width = '100px'),
+                  br(),
+                  actionButton("edit_cand_criteria_per_trial", "Edit", width = '100px'),
+                  br(),
+                  actionButton("delete_cand_criteria_per_trial", "Delete", width = '100px')
                 ),
                 mainPanel(
-                  DTOutput("crit_with_cands_for_type")
-                )
-              )
+                  DTOutput("crit_with_cands_for_type"),
+   
+                      downloadButton("downloadCandData", "Download Cand Crit Data", style =
+                                       'padding:4px; font-size:80%')
+                    )
+                    
+                    
+                  
+                  
+                
+              
                )
-      
+      )
       
     )
   )
@@ -378,12 +392,13 @@ order by cc.nct_id, cc.criteria_type_id "
     print(sessionInfo$df_crit_with_cands_count[input$crit_with_cands_count_rows_selected,]$criteria_type_id)
     
     scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
-    sessionInfo$df_crit_with_cands_for_type <- dbGetQuery(scon, select_cands_sql,
-                                                       params = c(sessionInfo$df_crit_with_cands_count[input$crit_with_cands_count_rows_selected,]$criteria_type_id) )
+    raw_cands <- dbGetQuery(scon, select_cands_sql,
+                params = c(sessionInfo$df_crit_with_cands_count[input$crit_with_cands_count_rows_selected,]$criteria_type_id) )
     DBI::dbDisconnect(scon)
     
-    sessionInfo$df_crit_with_cands_for_type <- aggregate(data=sessionInfo$df_crit_with_cands_for_type, cand_crit_text~nct_id+criteria_type_id, FUN=paste )
-    
+    #sessionInfo$df_crit_with_cands_for_type <- aggregate(data=sessionInfo$df_crit_with_cands_for_type, cand_crit_text~nct_id+criteria_type_id, paste, collapse = '\n' )
+    sessionInfo$df_crit_with_cands_for_type <- aggregate(data=raw_cands, cand_crit_text~nct_id+criteria_type_id, paste, collapse = '\n' )
+   # browser()
     crit_with_cands_for_type_dt <-
       datatable(
         sessionInfo$df_crit_with_cands_for_type,
@@ -1352,6 +1367,19 @@ where tc.nct_id = ?"
       #print(df_sel_crit)
     }
   )
+  
+  
+  
+  output$downloadCandData <- downloadHandler(
+    filename = function() { paste('sec_candidate_data_csv_', Sys.Date(), '.csv', sep = "") }
+    ,
+    content = function(file) {
+      print("writing file")
+      browser()
+      write.csv( sessionInfo$df_crit_with_cands_for_type, file, row.names = FALSE)
+    }
+  )
+  
   
 }
 

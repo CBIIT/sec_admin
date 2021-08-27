@@ -267,7 +267,8 @@ ui <- secure_app(
               
                )
       )
-      
+      ,
+      tabPanel("Generated Expression Work Queue")
     )
   )
   ,
@@ -382,7 +383,8 @@ observeEvent(input$crit_with_cands_count_rows_selected, {
 case
   when cc.inclusion_indicator = 1 then 'Inclusion: ' || cc.candidate_criteria_text
   when cc.inclusion_indicator = 0 then 'Exclusion: ' || cc.candidate_criteria_text
-end cand_crit_text
+end cand_crit_text,
+cc.candidate_criteria_norm_form, cc.candidate_criteria_expression
 
 from candidate_criteria cc
 join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
@@ -397,8 +399,9 @@ order by cc.nct_id, cc.criteria_type_id "
     DBI::dbDisconnect(scon)
     
     #sessionInfo$df_crit_with_cands_for_type <- aggregate(data=sessionInfo$df_crit_with_cands_for_type, cand_crit_text~nct_id+criteria_type_id, paste, collapse = '\n' )
-    sessionInfo$df_crit_with_cands_for_type <- aggregate(data=raw_cands, cand_crit_text~nct_id+criteria_type_id, paste, collapse = '\n' )
-   # browser()
+   # sessionInfo$df_crit_with_cands_for_type <- aggregate(data=raw_cands, cand_crit_text~nct_id+criteria_type_id, paste, collapse = '\n' )
+    sessionInfo$df_crit_with_cands_for_type <- raw_cands
+    # browser()
     crit_with_cands_for_type_dt <-
       datatable(
         sessionInfo$df_crit_with_cands_for_type,
@@ -408,7 +411,9 @@ order by cc.nct_id, cc.criteria_type_id "
         colnames = c(
           'NCT ID',
           'Type ID',
-          'Candidate Original Text'
+          'Candidate Original Text',
+          'Normal Form',
+          "Generated Expression"
           
         ),
         options = list(
@@ -1375,7 +1380,6 @@ where tc.nct_id = ?"
     ,
     content = function(file) {
       print("writing file")
-      browser()
       write.csv( sessionInfo$df_crit_with_cands_for_type, file, row.names = FALSE)
     }
   )

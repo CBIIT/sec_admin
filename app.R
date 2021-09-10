@@ -268,7 +268,16 @@ ui <- secure_app(
                )
       )
       ,
-      tabPanel("Generated Expression Work Queue")
+      tabPanel("Generated Expression Work Queue",
+               DTOutput("crit_work_queue"),
+               fluidRow(
+                 column(2, align = 'left',  offset = 1,actionButton("edit_gen_expression", label='Edit')),
+                    
+                column(3, align = 'left',actionButton("c", label='Activate New Expression') )    ,
+                column(2, align = 'left',offset = 1 ,actionButton("c", label='Mark Done') )      
+                
+                        
+               ))
     )
   )
   ,
@@ -299,7 +308,8 @@ server <- function(input, output, session) {
     df_crit_type_titles = NA,
     df_criteria_nct_id = NA,
     df_crit_with_cands_count = NA,
-    df_crit_with_cands_for_type = NA
+    df_crit_with_cands_for_type = NA,
+    df_crit_work_queue = NA
   )
   
   sessionInfo$result_auth <-
@@ -341,6 +351,59 @@ group by criteria_type_id
 select ct.criteria_type_id, ct.criteria_type_title, ccc.crit_count
 from criteria_types ct join cand_crit_count ccc on ct.criteria_type_id = ccc.criteria_type_id"
  
+work_queue_sql <- "
+ SELECT cc.nct_id, ct.criteria_type_id, ct.criteria_type_title,
+case
+  when cc.inclusion_indicator = 1 then 'Inclusion: ' || cc.candidate_criteria_text
+  when cc.inclusion_indicator = 0 then 'Exclusion: ' || cc.candidate_criteria_text
+end cand_crit_text,
+cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression
+
+from candidate_criteria cc
+join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
+where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' or 
+replace(tc.trial_criteria_expression,' ' ,'')  <> replace(cc.candidate_criteria_expression,' ' ,'' ) 
+) 
+and cc.candidate_criteria_expression <> 'NO MATCH'
+
+order by cc.nct_id, cc.criteria_type_id 
+"
+
+observe({
+  scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+  sessionInfo$df_crit_work_queue <- dbGetQuery(scon, work_queue_sql)
+  DBI::dbDisconnect(scon)
+  crit_work_queue_dt <- datatable(
+    sessionInfo$df_crit_work_queue,
+    class = 'cell-border stripe compact wrap hover',
+    selection = 'single',
+    escape = FALSE,
+    colnames = c('NCT ID',
+                 'Criteria Type ID',
+                 'Criteria Type',
+                  'Criteria Text',
+                 'Normal Form',
+                 'Generated Expression (new)',
+                 'Current Expression'
+                 ),
+    options = list(
+      info = TRUE,
+      searching = TRUE,
+      autoWidth = TRUE,
+      scrollX = TRUE,
+      deferRender = TRUE,
+      scrollY = "45vh",
+      scrollCollapse = TRUE,
+      paging = TRUE,
+      style = "overflow-y: scroll"
+    )
+  )
+  
+  output$crit_work_queue <-
+    DT::renderDataTable({
+      crit_work_queue_dt    })
+})
 
 observe({
   scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)

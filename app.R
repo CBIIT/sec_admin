@@ -178,12 +178,53 @@ ui <- secure_app(
         )
        , 
        fluidRow(
-         column(1, alight='right', actionButton("criteria_test_eval", label = "Test Expression")),
+         column(1, align='right', actionButton("criteria_test_eval", label = "Test Expression")),
          column(2, align = 'right',  offset = 9,actionButton("criteria_save", label='Save and Close'))
        )
       ),
       
       tags$head(tags$style("#add_criteria_per_trial_bsmodal .modal-footer{ display:none}"))
+    ),
+    # work queue bsmodal ----
+    bsModal(
+      "gen_expression_work_queue_bsmodal",
+      "Generated Expression Item",
+      "do_work_queue_item",
+      size = "large",
+      fluidPage(
+        
+        fluidRow(
+          column( 
+            6, textInput("genexp_nctid", "NCT ID")),
+          column(
+            6, textInput("genexp_crit_type", "Criteria Type"))
+        ),
+        fluidRow(
+          textAreaInput('genexp_crit_text',"Description", width = '100%')  %>%
+            shiny::tagAppendAttributes(style = 'width: 100%;', align = 'center')
+        ),
+        fluidRow(
+          textAreaInput('genexp_norm_form',"Normal Form", width = '100%')  %>%
+            shiny::tagAppendAttributes(style = 'width: 100%;', align = 'center')
+        ),
+        fluidRow(
+        textAreaInput('genexp_gen_expression',"Generated Expression", width = '100%')  %>%
+          shiny::tagAppendAttributes(style = 'width: 100%;', align = 'center')
+        ),
+        fluidRow(column(12, align = 'center',
+          actionButton('use_gen_expression','', icon = icon('arrow-down'))
+        )
+        ),
+        fluidRow(
+          textAreaInput('genexp_current_expression',"Current Expression", width = '100%')  %>%
+            shiny::tagAppendAttributes(style = 'width: 100%;', align = 'center')
+          
+        ),
+        fluidRow(
+          column(7, align='right', actionButton("genexp_mark_done", label = "Mark Done")),
+          column(2, align = 'right',  offset = 1,actionButton("genexp_save", label='Update Expression and Mark Done'))
+        )
+      )
     ),
     
     tabsetPanel(
@@ -270,14 +311,9 @@ ui <- secure_app(
       ,
       tabPanel("Generated Expression Work Queue",
                DTOutput("crit_work_queue"),
-               fluidRow(
-                 column(2, align = 'left',  offset = 1,actionButton("edit_gen_expression", label='Edit')),
-                    
-                column(3, align = 'left',actionButton("c", label='Activate New Expression') )    ,
-                column(2, align = 'left',offset = 1 ,actionButton("c", label='Mark Done') )      
-                
+               actionButton("do_work_queue_item", "Process NLP Work Queue Item")
                         
-               ))
+               )
     )
   )
   ,
@@ -309,7 +345,9 @@ server <- function(input, output, session) {
     df_criteria_nct_id = NA,
     df_crit_with_cands_count = NA,
     df_crit_with_cands_for_type = NA,
-    df_crit_work_queue = NA
+    df_crit_work_queue = NA,
+    refresh_work_queue_counter = 0,
+    work_queue_row_df = NA
   )
   
   sessionInfo$result_auth <-
@@ -327,6 +365,11 @@ server <- function(input, output, session) {
   shinyjs::disable('edit_criteria_per_trial')
   shinyjs::disable('delete_criteria_per_trial')
   
+  shinyjs::disable('genexp_nctid')
+  shinyjs::disable('genexp_crit_type')
+  shinyjs::disable('genexp_crit_text')
+  shinyjs::disable('genexp_norm_form')
+  shinyjs::disable('genexp_gen_expression')
   
   
  # con = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
@@ -352,7 +395,7 @@ select ct.criteria_type_id, ct.criteria_type_title, ccc.crit_count
 from criteria_types ct join cand_crit_count ccc on ct.criteria_type_id = ccc.criteria_type_id"
  
 work_queue_sql <- "
- SELECT cc.nct_id, ct.criteria_type_id, ct.criteria_type_title,
+ SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
 case
   when cc.inclusion_indicator = 1 then 'Inclusion: ' || cc.candidate_criteria_text
   when cc.inclusion_indicator = 0 then 'Exclusion: ' || cc.candidate_criteria_text
@@ -369,8 +412,12 @@ and cc.candidate_criteria_expression <> 'NO MATCH'
 
 order by cc.nct_id, cc.criteria_type_id 
 "
+#
+# Populate the work queue datatable ----
+#
 
-observe({
+
+observeEvent(sessionInfo$refresh_work_queue_counter, {
   scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
   sessionInfo$df_crit_work_queue <- dbGetQuery(scon, work_queue_sql)
   DBI::dbDisconnect(scon)
@@ -381,6 +428,7 @@ observe({
     escape = FALSE,
     colnames = c('NCT ID',
                  'Criteria Type ID',
+                 'Display Order',
                  'Criteria Type',
                   'Criteria Text',
                  'Normal Form',
@@ -396,14 +444,149 @@ observe({
       scrollY = "45vh",
       scrollCollapse = TRUE,
       paging = TRUE,
-      style = "overflow-y: scroll"
+      style = "overflow-y: scroll",
+      columnDefs = list(# Initially hidden columns
+        list(
+          visible = FALSE,
+          
+          targets = c(2,3)
+        ))
+    ),
+    callback = htmlwidgets::JS(
+      "table.on('dblclick', 'td',", 
+      "  function() {",
+      "    var row = table.cell(this).index().row;",
+      "    var col = table.cell(this).index().column;",
+      "    Shiny.setInputValue('work_queue_dblclick', {dt_row: row, dt_col: col});",
+      "  }",
+      ");"
     )
   )
   
   output$crit_work_queue <-
     DT::renderDataTable({
-      crit_work_queue_dt    })
+      crit_work_queue_dt   
+     
+      })
+  
+  
 })
+
+#
+# Process the work queue button click or table doubleclick ----
+#
+
+observeEvent(input$work_queue_dblclick, {
+  print(input$work_queue_dblclick)
+  print(paste("row_last_clicked from double click" , input$crit_work_queue_row_last_clicked))
+  
+  shinyjs::click("do_work_queue_item")
+  #browser()
+})
+
+observeEvent(input$do_work_queue_item, {
+  print("work queue button clicked ")
+  print(paste("row_last_clicked from button click" , input$crit_work_queue_row_last_clicked))
+  print(paste("rows_selected from button click" , input$crit_work_queue_rows_selected))
+  row_to_process <- -1
+  if (!is.null(input$crit_work_queue_rows_selected)) {
+    row_to_process <- input$crit_work_queue_rows_selected[1]
+  } else if  (!is.null(input$crit_work_queue_row_last_clicked)) {
+    row_to_process <- input$crit_work_queue_row_last_clicked
+  }
+  
+  if (row_to_process > -1) {
+    # work to do 
+    sessionInfo$work_queue_row_df <- sessionInfo$df_crit_work_queue[row_to_process,]
+   # print(rowdf)
+    updateTextInput(session, 'genexp_nctid', value = sessionInfo$work_queue_row_df$nct_id)
+    updateTextInput(session, 'genexp_crit_type', value = sessionInfo$work_queue_row_df$criteria_type_title)
+    updateTextInput(session, 'genexp_crit_text', value = sessionInfo$work_queue_row_df$cand_crit_text)
+    updateTextInput(session, 'genexp_norm_form', value = sessionInfo$work_queue_row_df$candidate_criteria_norm_form)
+    updateTextInput(session, 'genexp_gen_expression', value = sessionInfo$work_queue_row_df$candidate_criteria_expression)
+    updateTextInput(session, 'genexp_current_expression', value = sessionInfo$work_queue_row_df$trial_criteria_expression)
+    
+  }
+}
+  
+)
+
+observeEvent(input$use_gen_expression, {
+  print("use generated expression")
+  updateTextInput(session, 'genexp_current_expression', value = sessionInfo$work_queue_row_df$candidate_criteria_expression)
+  
+})
+
+observeEvent(input$genexp_mark_done, {
+ print("work queue mark done") 
+  update_mark_done_date_sql <- 'update candidate_criteria set marked_done_date = ? 
+     where nct_id = ? and criteria_type_id = ? and display_order = ?'
+  scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+  rs <- dbExecute(scon, update_mark_done_date_sql, 
+                  params = c(format_iso_8601(Sys.time()),
+                             sessionInfo$work_queue_row_df$nct_id, 
+                             sessionInfo$work_queue_row_df$criteria_type_id,
+                             sessionInfo$work_queue_row_df$display_order))
+  DBI::dbDisconnect(scon)
+  sessionInfo$refresh_work_queue_counter <- sessionInfo$refresh_work_queue_counter + 1
+}
+)
+
+observeEvent(input$genexp_save, {
+  print("work queue save and close ")
+  update_mark_done_date_sql <- 'update candidate_criteria set marked_done_date = ? 
+     where nct_id = ? and criteria_type_id = ? and display_order = ?'
+  
+  update_crit_expression_sql <- "update trial_criteria set trial_criteria_orig_text = ? , trial_criteria_refined_text = ?, 
+    trial_criteria_expression = ?, update_date = ?, update_by = ? where nct_id = ? and criteria_type_id = ? "
+  
+  is_there_a_crit_sql <- "select count(*) as num_recs from trial_criteria where nct_id = ? and criteria_type_id = ?"
+  
+  insert_a_crit_sql <- 'insert into trial_criteria(nct_id, criteria_type_id, trial_criteria_orig_text,
+                       trial_criteria_refined_text, trial_criteria_expression, update_date, update_by) 
+                       values(?,?,?,?,?,?,?)'
+  
+  scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+  
+  # Also update the criteria used for matching
+  num_crits <- dbGetQuery(scon, is_there_a_crit_sql,
+                  params = c(sessionInfo$work_queue_row_df$nct_id,
+                             sessionInfo$work_queue_row_df$criteria_type_id) )
+  print(paste("there are ", num_crits$num_recs , " records "))
+
+  rs <- dbExecute(scon, update_mark_done_date_sql, 
+                  params = c(format_iso_8601(Sys.time()),
+                             sessionInfo$work_queue_row_df$nct_id, 
+                             sessionInfo$work_queue_row_df$criteria_type_id,
+                             sessionInfo$work_queue_row_df$display_order))
+  if (num_crits$num_recs == 0 ) {
+    print('need to insert')
+    rs <- dbExecute(scon, insert_a_crit_sql,
+                    params = c(sessionInfo$work_queue_row_df$nct_id,
+                               sessionInfo$work_queue_row_df$criteria_type_id,
+                               sessionInfo$work_queue_row_df$cand_crit_text,
+                               sessionInfo$work_queue_row_df$candidate_criteria_norm_form,
+                               input$genexp_current_expression,
+                               format_iso_8601(Sys.time()),
+                               sessionInfo$result_auth$user)
+                    )
+  } else {
+    print('need to update ')
+    rs <- dbExecute(scon, update_crit_expression_sql, 
+                  params = c(sessionInfo$work_queue_row_df$cand_crit_text,
+                             sessionInfo$work_queue_row_df$candidate_criteria_norm_form,
+                             input$genexp_current_expression, 
+                             format_iso_8601(Sys.time()),
+                             sessionInfo$result_auth$user,
+                             sessionInfo$work_queue_row_df$nct_id,
+                             sessionInfo$work_queue_row_df$criteria_type_id ))
+  } 
+  sessionInfo$refresh_criteria_counter <- sessionInfo$refresh_criteria_counter + 1
+  DBI::dbDisconnect(scon)
+  sessionInfo$refresh_work_queue_counter <- sessionInfo$refresh_work_queue_counter + 1
+  
+}
+)
 
 observe({
   scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)

@@ -314,6 +314,18 @@ ui <- secure_app(
                actionButton("do_work_queue_item", "Process NLP Work Queue Item")
                         
                )
+      ,
+      tabPanel("NLP Tokenizer Concepts",
+             
+              
+                  textInput("tokenizer_nct_id", "NCT ID"),
+                
+                 actionButton("get_tokenizer_input_for_trial", "Show Tokenizer Input For Trial"),
+                 br(),
+               DTOutput("tokenizer_output_for_trial", width = "100%")
+               )
+
+      
     )
   )
   ,
@@ -371,7 +383,7 @@ server <- function(input, output, session) {
   shinyjs::disable('genexp_norm_form')
   shinyjs::disable('genexp_gen_expression')
   
-  
+
  # con = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
   
   #
@@ -473,6 +485,87 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
 })
 
 #
+# Get tokenizer input ----
+#
+
+observeEvent(input$get_tokenizer_input_for_trial, {
+  get_tokenizer_results_sql <-
+    "
+  select ncit_code, display_order, pref_name, span_text, start_index, end_index, inclusion_indicator, description
+    from nlp_data_view where nct_id = ?
+  
+  "
+  
+  print("get tokenizer input button click") 
+  scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+  rs <- dbGetQuery(scon, get_tokenizer_results_sql, 
+                  params = c(input$tokenizer_nct_id))  
+  
+  DBI::dbDisconnect(scon)
+  rs$display_order <- as.factor(rs$display_order)
+  rs$inclusion_indicator <- as.factor(rs$inclusion_indicator)
+  
+ # browser()
+  tokenizer_results_dt <- datatable(
+    rs,
+    class = 'cell-border stripe compact wrap hover',
+    selection = 'single',
+    escape = FALSE,
+    filter = 'top',
+    colnames = c('NCIt Code',
+                 'Display Order',
+                 'Preferred Name',
+                 'Span Text',
+                 'Start Index',
+                 'End Index',
+                 'Inclusion Indicator',
+                 'Description'
+    ),
+    options = list(
+      info = TRUE,
+      
+      
+      searching = TRUE,
+      #autoWidth = TRUE,
+     # scrollX = TRUE,
+    #  deferRender = TRUE,
+    #  scrollY = "45vh",
+   #   scrollCollapse = TRUE,
+      paging = TRUE,
+   #   style = "overflow-y: scroll",
+       columnDefs = list(
+       
+         list(
+           targets = match(
+             c('description'),
+             names(rs)
+           ),
+           render = JS(
+             "function(data, type, row, meta) { if (data === null) { return \"\" } ",
+             "return type === 'display' && data.length > 30 ?",
+             "'<span title=\"' + data + '\">' + data.substr(0, 30) + '...</span>' : data;",
+             "}"
+           )
+         )
+         
+         )
+
+  
+   
+    )
+  )
+  
+  output$tokenizer_output_for_trial <-
+    DT::renderDataTable({
+      tokenizer_results_dt   
+      
+    })
+}
+)
+
+
+
+#
 # Process the work queue button click or table doubleclick ----
 #
 
@@ -483,6 +576,7 @@ observeEvent(input$work_queue_dblclick, {
   shinyjs::click("do_work_queue_item")
   #browser()
 })
+
 
 observeEvent(input$do_work_queue_item, {
   print("work queue button clicked ")

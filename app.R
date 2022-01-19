@@ -517,6 +517,7 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
 observeEvent(input$generate_paths, {
   print(paste('generate paths',input$path_start_ncit_code , ' to ', input$path_end_ncit_code))
 
+
   get_path_info_sql <- 
     "
   with all_things as (
@@ -527,8 +528,7 @@ join ncit n1 on tcp.parent = n1.code
 join ncit n2 on tcp.descendant = n2.code
 where tcp.parent = ? and tcp.descendant = ?
 )
-select al.parent_code, al.parent, al.descendant_code, al.descendant, al.level, al.path ,
-\"select group_concat(pref_name || '(' || code || ') ') as enumerated_path from ncit where code in ('\"||replace(al.path, '|', \"','\")||\"')\" as csv_path
+select al.parent_code, al.parent, al.descendant_code, al.descendant, al.level, al.path 
 from all_things al
 "
   scon <- DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
@@ -537,17 +537,70 @@ from all_things al
   print(rs)
 
   rs$enumerated_path <-
-    lapply(rs$csv_path,
+    lapply(rs$path,
            function(x)
              {
-             rs_path <- dbGetQuery(scon,x)
-             rs_path$enumerated_path[[1]]
+             qs <- paste("WITH  split(counter, word, str) AS (
+    SELECT 0,  '', '",  x ,"'||'|'
+    UNION ALL SELECT
+	counter + 1, 
+    substr(str, 0, instr(str, '|')),
+    substr(str, instr(str, '|')+1)
+    FROM split WHERE str!=''
+) 
+, 
+path_tab as (
+SELECT s.counter, s.word as ncit_code , n.pref_name , s.word || '-' || n.pref_name as full_name 
+FROM split s join ncit n on s.word = n.code where s.counter > 0 )
+select * from path_tab order by counter
              
+             " , sep = "" )
+            # print(qs)
+            # browser()
+             
+             rs_i <- dbGetQuery(scon,qs)
+             paste0(rs_i$full_name, collapse = ' --> ')
+
            }
            )
   DBI::dbDisconnect(scon)
-  browser()
-  print(rs)
+  path_results_dt <- datatable(
+    rs,
+    class = 'cell-border stripe compact wrap hover',
+    selection = 'single',
+    escape = FALSE,
+    #filter = 'top',
+    colnames = c(
+                  'Parent Code',
+                 'Parent',
+                 'Descendant Code',
+                 'Descendant',
+                 'Distance',
+                 'Path',
+                 'Enumerated Path'
+
+    ),
+    options = list(
+      info = TRUE,
+      rownames= FALSE,
+      
+      searching = TRUE,
+      #autoWidth = TRUE,
+      # scrollX = TRUE,
+      #  deferRender = TRUE,
+      #  scrollY = "45vh",
+      #   scrollCollapse = TRUE,
+      paging = TRUE
+      #   style = "overflow-y: scroll"
+      
+    )
+  )
+  
+  output$path_exporer_output <-
+    DT::renderDataTable({
+      path_results_dt   
+      
+    })
   }
 )
 #

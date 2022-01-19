@@ -324,7 +324,34 @@ ui <- secure_app(
                  br(),
                DTOutput("tokenizer_output_for_trial", width = "100%")
                )
-
+      ,
+      tabPanel("NCIt Path Explorer",
+               fluidPage(
+                 
+                 fluidRow(
+                   column( 
+                     4, textInput("path_start_ncit_code", "Start NCIt Code")),
+                   column(
+                     4,  textInput("path_end_ncit_code","End NCIt Code" )),
+                   column(4, actionButton("generate_paths", "Show Paths"),
+                          tags$style(type='text/css', "#generate_paths { width:100%; margin-top: 25px;}"),
+                          
+                   )
+                 )
+               )   
+                 , 
+ 
+                   DTOutput("path_exporer_output", width = "100%")
+ 
+                 
+                 
+               )
+               
+               
+        
+               
+   
+      
       
     )
   )
@@ -484,6 +511,45 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
   
 })
 
+# 
+# Get paths for concept codes ----
+#
+observeEvent(input$generate_paths, {
+  print(paste('generate paths',input$path_start_ncit_code , ' to ', input$path_end_ncit_code))
+
+  get_path_info_sql <- 
+    "
+  with all_things as (
+ select tcp.parent as parent_code, n1.pref_name as parent, 
+            tcp.descendant as descendant_code, n2.pref_name as descendant, tcp.level, tcp.path 
+from ncit_tc_with_path tcp  
+join ncit n1 on tcp.parent = n1.code 
+join ncit n2 on tcp.descendant = n2.code
+where tcp.parent = ? and tcp.descendant = ?
+)
+select al.parent_code, al.parent, al.descendant_code, al.descendant, al.level, al.path ,
+\"select group_concat(pref_name || '(' || code || ') ') as enumerated_path from ncit where code in ('\"||replace(al.path, '|', \"','\")||\"')\" as csv_path
+from all_things al
+"
+  scon <- DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+  rs <- dbGetQuery(scon, get_path_info_sql, 
+                   params = c(input$path_start_ncit_code,  input$path_end_ncit_code))  
+  print(rs)
+
+  rs$enumerated_path <-
+    lapply(rs$csv_path,
+           function(x)
+             {
+             rs_path <- dbGetQuery(scon,x)
+             rs_path$enumerated_path[[1]]
+             
+           }
+           )
+  DBI::dbDisconnect(scon)
+  browser()
+  print(rs)
+  }
+)
 #
 # Get tokenizer input ----
 #
@@ -497,7 +563,7 @@ observeEvent(input$get_tokenizer_input_for_trial, {
   "
   
   print("get tokenizer input button click") 
-  scon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
+  scon <- DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
   rs <- dbGetQuery(scon, get_tokenizer_results_sql, 
                   params = c(input$tokenizer_nct_id))  
   

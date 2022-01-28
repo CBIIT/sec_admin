@@ -322,7 +322,9 @@ ui <- secure_app(
                 
                  actionButton("get_tokenizer_input_for_trial", "Show Tokenizer Input For Trial"),
                  br(),
-               DTOutput("tokenizer_output_for_trial", width = "100%")
+               DTOutput("tokenizer_output_for_trial", width = "100%"),
+               downloadButton("downloadTokenizerData", "Download Tokenizer Data", style =
+                                'padding:4px; font-size:80%')
                )
       ,
       tabPanel("NCIt Path Explorer",
@@ -386,7 +388,8 @@ server <- function(input, output, session) {
     df_crit_with_cands_for_type = NA,
     df_crit_work_queue = NA,
     refresh_work_queue_counter = 0,
-    work_queue_row_df = NA
+    work_queue_row_df = NA,
+    tokenizerData = NA
   )
   
   sessionInfo$result_auth <-
@@ -624,6 +627,7 @@ observeEvent(input$get_tokenizer_input_for_trial, {
   rs$display_order <- as.factor(rs$display_order)
   rs$inclusion_indicator <- as.factor(rs$inclusion_indicator)
   
+  sessionInfo$tokenizerData <- rs
  # browser()
   tokenizer_results_dt <- datatable(
     rs,
@@ -1843,6 +1847,14 @@ where tc.nct_id = ?"
     }
   )
   
+  output$downloadTokenizerData <- downloadHandler(
+    filename = function() { paste('sec_tokenizer_data_csv_', Sys.Date(), '.csv', sep = "") }
+    ,
+    content = function(file) {
+      print("writing file")
+      write.csv( sessionInfo$tokenizerData, file, row.names = FALSE)
+    }
+  )
   
 }
 

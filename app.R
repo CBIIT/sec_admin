@@ -27,6 +27,7 @@ library(shinyFeedback)
 library(shinyalert)
 
 library(parsedate)
+library(writexl)
 
 source('eval_prior_therapy_app.R')
 source('check_if_any.R')
@@ -343,9 +344,11 @@ ui <- secure_app(
                )   
                  , 
  
-                   DTOutput("path_exporer_output", width = "100%")
+                   DTOutput("path_explorer_output", width = "100%"),
  
-                 
+               downloadButton("downloadNCITData", "Download NCIT Path Data", style =
+                                'padding:4px; font-size:80%')
+      
                  
                )
                
@@ -389,7 +392,8 @@ server <- function(input, output, session) {
     df_crit_work_queue = NA,
     refresh_work_queue_counter = 0,
     work_queue_row_df = NA,
-    tokenizerData = NA
+    tokenizerData = NA,
+    ncit_path_data = NA
   )
   
   sessionInfo$result_auth <-
@@ -563,10 +567,15 @@ select * from path_tab order by counter
              
              rs_i <- dbGetQuery(scon,qs)
              paste0(rs_i$full_name, collapse = ' --> ')
-
+             
            }
            )
   DBI::dbDisconnect(scon)
+  temp_rs <-  as.data.frame(lapply(rs, unlist))
+  rs <- temp_rs
+  sessionInfo$ncit_path_data <- rs
+  #browser()
+  
   path_results_dt <- datatable(
     rs,
     class = 'cell-border stripe compact wrap hover',
@@ -599,7 +608,7 @@ select * from path_tab order by counter
     )
   )
   
-  output$path_exporer_output <-
+  output$path_explorer_output <-
     DT::renderDataTable({
       path_results_dt   
       
@@ -1837,7 +1846,7 @@ where tc.nct_id = ?"
   )
   
   
-  
+
   output$downloadCandData <- downloadHandler(
     filename = function() { paste('sec_candidate_data_csv_', Sys.Date(), '.csv', sep = "") }
     ,
@@ -1855,6 +1864,18 @@ where tc.nct_id = ?"
       write.csv( sessionInfo$tokenizerData, file, row.names = FALSE)
     }
   )
+  
+  # Download NCIT Path data ----
+  output$downloadNCITData <- downloadHandler(
+    filename = function() { paste('sec_ncit__path_data_csv_', Sys.Date(), '.csv', sep = "") }
+    ,
+    content = function(file) {
+      print("writing file")
+      write.csv( sessionInfo$ncit_path_data, file, row.names = FALSE)
+    }
+  )
+  
+  
   
 }
 

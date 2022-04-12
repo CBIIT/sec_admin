@@ -301,7 +301,7 @@ ui <- secure_app(
             6, textInput("genexp_crit_type", "Criteria Type"))
         ),
         fluidRow(
-          textAreaInput('genexp_crit_text',"Description", width = '100%')  %>%
+          textAreaInput('genexp_crit_text',"Description", width = '100%', height = '200px')  %>%
             shiny::tagAppendAttributes(style = 'width: 100%;', align = 'center')
         ),
         fluidRow(
@@ -411,6 +411,11 @@ ui <- secure_app(
       )
       ,
       tabPanel("Generated Expression Work Queue",
+               fluidRow(
+                 column( 
+                   4, checkboxInput("exclude_industrial_trials_checkbox", "Exclude Industrial Trials", value = TRUE))
+                 
+               ), 
                DTOutput("crit_work_queue"),
                actionButton("do_work_queue_item", "Process NLP Work Queue Item")
                         
@@ -437,7 +442,7 @@ ui <- secure_app(
                    column(
                      4,  textInput("path_end_ncit_code","End NCIt Code" )),
                    column(4, actionButton("generate_paths", "Show Paths"),
-                          tags$style(type='text/css', "#generate_paths { width:100%; margin-top: 25px;}"),
+                          tags$style(type='text/css', "#generate_paths { width:100%; margin-top: 25px;}")
                           
                    )
                  )
@@ -540,7 +545,7 @@ group by criteria_type_id
 select ct.criteria_type_id, ct.criteria_type_title, ccc.crit_count
 from criteria_types ct join cand_crit_count ccc on ct.criteria_type_id = ccc.criteria_type_id"
  
-work_queue_sql <- "
+work_queue_all_sql <- "
  SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
 case
   when cc.inclusion_indicator = true then 'Inclusion: ' || cc.candidate_criteria_text
@@ -558,18 +563,59 @@ and cc.candidate_criteria_expression <> 'NO MATCH'
 
 order by cc.nct_id, cc.criteria_type_id 
 "
+
+work_queue_no_industrial_sql <- "
+SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
+case
+when cc.inclusion_indicator = true then 'Inclusion: ' || cc.candidate_criteria_text
+when cc.inclusion_indicator = false then 'Exclusion: ' || cc.candidate_criteria_text
+end cand_crit_text,
+cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression
+
+from candidate_criteria cc
+join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+join trials t on cc.nct_id = t.nct_id 
+left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
+where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' or 
+replace(tc.trial_criteria_expression,' ' ,'')  <> replace(cc.candidate_criteria_expression,' ' ,'' ) 
+) 
+and cc.candidate_criteria_expression <> 'NO MATCH'  and t.study_source <> 'Industrial'
+"
+#
+
+observeEvent( input$exclude_industrial_trials_checkbox, {
+  print("exclude_industrial_trials_checkbox")
+  sessionInfo$refresh_work_queue_counter <- sessionInfo$refresh_work_queue_counter + 1
+}, ignoreNULL = TRUE
+)
+
 #
 # Populate the work queue datatable ----
 #
 
 
 observeEvent(sessionInfo$refresh_work_queue_counter, {
-  sessionInfo$df_crit_work_queue <- safe_query(dbGetQuery, work_queue_sql)
+  sessionInfo$df_crit_work_queue
+  
+#  print(paste ("industrials trials : ", input$exclude_industrial_trials_checkbox))
+#  browser()
+  if (is.null(input$exclude_industrial_trials_checkbox) ||input$exclude_industrial_trials_checkbox == FALSE ) {
+    this_sql <- work_queue_all_sql
+  }
+  else {
+    this_sql <- work_queue_no_industrial_sql
+  }
+  
+  rs <- safe_query(dbGetQuery, this_sql)
+  rs$criteria_type_title <- as.factor(rs$criteria_type_title) 
+  sessionInfo$df_crit_work_queue <- rs
   crit_work_queue_dt <- datatable(
     sessionInfo$df_crit_work_queue,
     class = 'cell-border stripe compact wrap hover',
     selection = 'single',
+    filter = 'top',
     escape = FALSE,
+   # fillContainer = TRUE,
     colnames = c('NCT ID',
                  'Criteria Type ID',
                  'Display Order',
@@ -584,9 +630,10 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
       searching = TRUE,
       autoWidth = TRUE,
       scrollX = TRUE,
-      deferRender = TRUE,
-      scrollY = "45vh",
-      scrollCollapse = TRUE,
+   #   deferRender = TRUE,
+      lengthMenu = c(50,150, 250),
+      scrollY = "65vh",
+   #   scrollCollapse = TRUE,
       paging = TRUE,
       style = "overflow-y: scroll",
       columnDefs = list(# Initially hidden columns
@@ -594,7 +641,16 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
           visible = FALSE,
           
           targets = c(2,3)
-        ))
+        ),
+        list(
+          width='150px',
+          targets = c(4)
+        )
+        ),
+     list(
+     width='300px',
+       targets = c(5)
+     )
     ),
     callback = htmlwidgets::JS(
       "table.on('dblclick', 'td',", 
@@ -692,6 +748,7 @@ select * from path_tab order by counter
       rownames= FALSE,
       
       searching = TRUE,
+      lengthMenu = c(50,150, 250),
       #autoWidth = TRUE,
       # scrollX = TRUE,
       #  deferRender = TRUE,

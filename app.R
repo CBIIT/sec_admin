@@ -498,7 +498,8 @@ server <- function(input, output, session) {
     refresh_work_queue_counter = 0,
     work_queue_row_df = NA,
     tokenizerData = NA,
-    ncit_path_data = NA
+    ncit_path_data = NA,
+    crit_work_queue_dt = NA
   )
   
   sessionInfo$result_auth <-
@@ -609,6 +610,8 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
   rs <- safe_query(dbGetQuery, this_sql)
   rs$criteria_type_title <- as.factor(rs$criteria_type_title) 
   sessionInfo$df_crit_work_queue <- rs
+  
+ 
   crit_work_queue_dt <- datatable(
     sessionInfo$df_crit_work_queue,
     class = 'cell-border stripe compact wrap hover',
@@ -663,9 +666,10 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
     )
   )
   
+  
   output$crit_work_queue <-
     DT::renderDataTable({
-      crit_work_queue_dt   
+   crit_work_queue_dt   
      
       })
   

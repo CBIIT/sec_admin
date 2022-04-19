@@ -53,6 +53,8 @@ pool_con <- dbPool(#drv = RPostgreSQL::PostgreSQL(),
   user = local_user,
   password =local_password,
   port = local_port, 
+  timezone = Sys.timezone(), 
+  timezone_out = Sys.timezone(),
   idleTimeout = pool_idleTimeout,
   minSize = pool_minSize,
   maxSize = pool_maxSize,
@@ -413,7 +415,11 @@ ui <- secure_app(
       tabPanel("Generated Expression Work Queue",
                fluidRow(
                  column( 
-                   4, checkboxInput("exclude_industrial_trials_checkbox", "Exclude Industrial Trials", value = TRUE))
+                   2, checkboxInput("exclude_industrial_trials_checkbox", "Exclude Industrial Trials", value = TRUE))
+                 ,
+                 column(
+                   10, radioGroupButtons("gen_exp_crit_type_rb", label = "Criteria Type", choiceNames = NA, choiceValues = NA)
+                 )
                  
                ), 
                DTOutput("crit_work_queue"),
@@ -561,8 +567,9 @@ where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = ''
 replace(tc.trial_criteria_expression,' ' ,'')  <> replace(cc.candidate_criteria_expression,' ' ,'' ) 
 ) 
 and cc.candidate_criteria_expression <> 'NO MATCH'
-
-order by cc.nct_id, cc.criteria_type_id 
+and cc.criteria_type_id = $1 
+and (cc.generated_date > cc.marked_done_date or cc.marked_done_date is null) 
+order by cc.nct_id 
 "
 
 work_queue_no_industrial_sql <- "
@@ -581,6 +588,9 @@ where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = ''
 replace(tc.trial_criteria_expression,' ' ,'')  <> replace(cc.candidate_criteria_expression,' ' ,'' ) 
 ) 
 and cc.candidate_criteria_expression <> 'NO MATCH'  and t.study_source <> 'Industrial'
+and cc.criteria_type_id = $1
+and (cc.generated_date > cc.marked_done_date or cc.marked_done_date is null) 
+order by cc.nct_id
 "
 #
 
@@ -599,7 +609,10 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
   sessionInfo$df_crit_work_queue
   
 #  print(paste ("industrials trials : ", input$exclude_industrial_trials_checkbox))
-#  browser()
+  #browser()
+  if( ! is.null(input$gen_exp_crit_type_rb) && nchar(input$gen_exp_crit_type_rb) > 0)  {
+    
+    
   if (is.null(input$exclude_industrial_trials_checkbox) ||input$exclude_industrial_trials_checkbox == FALSE ) {
     this_sql <- work_queue_all_sql
   }
@@ -607,7 +620,7 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
     this_sql <- work_queue_no_industrial_sql
   }
   
-  rs <- safe_query(dbGetQuery, this_sql)
+  rs <- safe_query(dbGetQuery, this_sql, params = c( input$gen_exp_crit_type_rb))
   rs$criteria_type_title <- as.factor(rs$criteria_type_title) 
   sessionInfo$df_crit_work_queue <- rs
   
@@ -673,7 +686,7 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
      
       })
   
-  
+  }
 })
 
 # 
@@ -899,10 +912,10 @@ observeEvent(input$use_gen_expression, {
 
 observeEvent(input$genexp_mark_done, {
  print("work queue mark done") 
-  update_mark_done_date_sql <- 'update candidate_criteria set marked_done_date = $1 
-     where nct_id = $2 and criteria_type_id = $3 and display_order = $4'
+  update_mark_done_date_sql <- 'update candidate_criteria set marked_done_date = now() 
+     where nct_id = $1 and criteria_type_id = $2 and display_order = $3'
   rs <- safe_query(dbExecute, update_mark_done_date_sql, 
-                  params = c(format_iso_8601(Sys.time()),
+                  params = c(#format_iso_8601(Sys.time()),
                              sessionInfo$work_queue_row_df$nct_id, 
                              sessionInfo$work_queue_row_df$criteria_type_id,
                              sessionInfo$work_queue_row_df$display_order))
@@ -911,18 +924,18 @@ observeEvent(input$genexp_mark_done, {
 )
 
 observeEvent(input$genexp_save, {
-  print("work queue save and close ")
-  update_mark_done_date_sql <- 'update candidate_criteria set marked_done_date = $1 
-     where nct_id = $2 and criteria_type_id = $3 and display_order = $4'
+  print("work queue save the expression and mark done ")
+  update_mark_done_date_sql <- 'update candidate_criteria set marked_done_date = now() 
+     where nct_id = $1 and criteria_type_id = $2 and display_order = $3'
   
   update_crit_expression_sql <- "update trial_criteria set trial_criteria_orig_text = $1 , trial_criteria_refined_text = $2, 
-    trial_criteria_expression = $3, update_date = $4, update_by = $5 where nct_id = $6 and criteria_type_id = $7 "
+    trial_criteria_expression = $3, update_date = now(), update_by = $4 where nct_id = $5 and criteria_type_id = $6 "
   
   is_there_a_crit_sql <- "select count(*) as num_recs from trial_criteria where nct_id = $1 and criteria_type_id = $2"
   
   insert_a_crit_sql <- 'insert into trial_criteria(nct_id, criteria_type_id, trial_criteria_orig_text,
                        trial_criteria_refined_text, trial_criteria_expression, update_date, update_by) 
-                       values($1,$2,$3,$4,$5,$6,$7)'
+                       values($1,$2,$3,$4,$5,now(),$6)'
   
 
   # Also update the criteria used for matching
@@ -932,7 +945,7 @@ observeEvent(input$genexp_save, {
   print(paste("there are ", num_crits$num_recs , " records "))
 
   rs <- safe_query(dbExecute, update_mark_done_date_sql, 
-                  params = c(format_iso_8601(Sys.time()),
+                  params = c(#Sys.time(),
                              sessionInfo$work_queue_row_df$nct_id, 
                              sessionInfo$work_queue_row_df$criteria_type_id,
                              sessionInfo$work_queue_row_df$display_order))
@@ -944,7 +957,7 @@ observeEvent(input$genexp_save, {
                                sessionInfo$work_queue_row_df$cand_crit_text,
                                sessionInfo$work_queue_row_df$candidate_criteria_norm_form,
                                input$genexp_current_expression,
-                               format_iso_8601(Sys.time()),
+                              # Sys.time(),
                                sessionInfo$result_auth$user)
                     )
   } else {
@@ -953,7 +966,7 @@ observeEvent(input$genexp_save, {
                   params = c(sessionInfo$work_queue_row_df$cand_crit_text,
                              sessionInfo$work_queue_row_df$candidate_criteria_norm_form,
                              input$genexp_current_expression, 
-                             format_iso_8601(Sys.time()),
+                            # Sys.time(),
                              sessionInfo$result_auth$user,
                              sessionInfo$work_queue_row_df$nct_id,
                              sessionInfo$work_queue_row_df$criteria_type_id ))
@@ -963,6 +976,18 @@ observeEvent(input$genexp_save, {
   
 }
 )
+
+#
+# The criteria types radio button in the work queue window has been changed ----
+#
+
+observeEvent(input$gen_exp_crit_type_rb, {
+  print("crit types in radio button group changed ")
+  print(paste("selected radio button is ", input$gen_exp_crit_type_rb))
+  sessionInfo$refresh_work_queue_counter <- sessionInfo$refresh_work_queue_counter + 1
+  
+}, ignoreInit = TRUE)
+
 
 observe({
   sessionInfo$df_crit_with_cands_count <- safe_query(dbGetQuery, crit_with_cands_count_sql)
@@ -1092,6 +1117,12 @@ order by cc.nct_id, cc.criteria_type_id "
       'criteria_type_typer',
       choices = sessionInfo$df_crit_type_titles$criteria_type_title ,
       server = TRUE
+    )
+    
+    updateRadioGroupButtons(
+      session = session, inputId = "gen_exp_crit_type_rb",
+      choiceNames =  sessionInfo$df_crit_types$criteria_type_title,
+      choiceValues = sessionInfo$df_crit_types$criteria_type_id
     )
     
     criteria_types_titles_dt <- datatable(
@@ -1443,7 +1474,8 @@ order by cc.nct_id, cc.criteria_type_id "
                    crit_type_sel <-
                      sessionInfo$df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
                    trial_criteria_for_type_sql <-
-                     "select nct_id, criteria_type_id, trial_criteria_orig_text, trial_criteria_refined_text, trial_criteria_expression, update_date, update_by 
+                     "select nct_id, criteria_type_id, trial_criteria_orig_text, trial_criteria_refined_text, trial_criteria_expression, 
+                       to_char(update_date, 'YYYY-MM-DD HH24:MI:SS') as update_date, update_by 
                    from trial_criteria where criteria_type_id = $1 order by nct_id"
                    sessionInfo$df_trial_criteria_for_type <-
                      safe_query(dbGetQuery,
@@ -1505,7 +1537,7 @@ order by cc.nct_id, cc.criteria_type_id "
       print(paste("nct_id selected:", nct_id_sel))
       trial_crit_for_ncit_id_sql <-
         "select tc.nct_id, ct.criteria_type_title, tc.trial_criteria_orig_text, tc.trial_criteria_refined_text,
-tc.trial_criteria_expression, tc.update_date, tc.update_by
+tc.trial_criteria_expression, to_char(tc.update_date, 'YYYY-MM-DD HH24:MI:SS') as update_date, tc.update_by
 from trial_criteria tc join criteria_types ct on tc.criteria_type_id= ct.criteria_type_id
 where tc.nct_id = $1"
       sessionInfo$df_trial_criteria_for_nct_id <-
@@ -1552,6 +1584,9 @@ where tc.nct_id = $1"
   }
   ,
   ignoreNULL = FALSE) #
+  
+  
+
   
   #-------------------------------------------------------------------------------------------
   #
@@ -1706,9 +1741,9 @@ where tc.nct_id = $1"
    
     
     insert_crit_sql <- "insert into trial_criteria(nct_id, criteria_type_id, trial_criteria_orig_text,trial_criteria_refined_text,
-        trial_criteria_expression, update_date, update_by) values($1,$2,$3,$4,$5,$6,$7)"
+        trial_criteria_expression, update_date, update_by) values($1,$2,$3,$4,$5,now(),$6)"
     update_crit_sql <- "update trial_criteria set trial_criteria_orig_text = $1 , trial_criteria_refined_text = $2, 
-    trial_criteria_expression = $3, update_date = $4, update_by = $5 where nct_id = $6 and criteria_type_id = $7 " 
+    trial_criteria_expression = $3, update_date = now(), update_by = $4 where nct_id = $5 and criteria_type_id = $6 " 
     
     type_row_df <- sessionInfo$df_crit_type_titles[sessionInfo$df_crit_type_titles$criteria_type_title == input$criteria_type_typer,]
     
@@ -1722,7 +1757,7 @@ where tc.nct_id = $1"
         rs <- safe_query(dbExecute, insert_crit_sql, 
                         params = c(input$criteria_per_trial_nct_id, type_row_df$criteria_type_id, 
                                    input$criteria_per_trial_original_text,input$criteria_per_trial_refined_text,
-                                   input$criteria_per_trial_expression, format_iso_8601(Sys.time()),
+                                   input$criteria_per_trial_expression, #format_iso_8601(Sys.time()),
                                    sessionInfo$result_auth$user))
         #sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1
         # save was successful, and close the panel and clear the fields
@@ -1753,7 +1788,7 @@ where tc.nct_id = $1"
       tryCatch( {
       rs <- safe_query(dbExecute, update_crit_sql, 
                       params = c(input$criteria_per_trial_original_text,input$criteria_per_trial_refined_text,
-                                 input$criteria_per_trial_expression, format_iso_8601(Sys.time()),
+                                 input$criteria_per_trial_expression, #format_iso_8601(Sys.time()),
                                  sessionInfo$result_auth$user,input$criteria_per_trial_nct_id, type_row_df$criteria_type_id ))
       print(rs)
       #sessionInfo$refresh_criteria_types_counter <- sessionInfo$refresh_criteria_types_counter + 1

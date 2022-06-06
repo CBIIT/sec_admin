@@ -366,7 +366,9 @@ ui <- secure_app(
             )
             
           ),
-          mainPanel(DTOutput("trial_crit_by_type"))
+          mainPanel(DTOutput("trial_crit_by_type"),
+                    downloadButton("downloadTrialDataByType", "Download Trial Criteria", style =
+                                     'padding:4px; font-size:80%'))
         )
         
       )      
@@ -383,7 +385,8 @@ ui <- secure_app(
                    br(),
                    actionButton("delete_criteria_per_trial", "Delete", width = '100px')
                  ),
-                 mainPanel(DTOutput("trial_crit_per_trial"))
+                 mainPanel(DTOutput("trial_crit_per_trial")
+                          )
                ))
       ,
       tabPanel("Trials with Candidate Criteria",
@@ -1118,7 +1121,7 @@ order by cc.nct_id, cc.criteria_type_id "
       choices = sessionInfo$df_crit_type_titles$criteria_type_title ,
       server = TRUE
     )
-    
+    #browser()
     updateRadioGroupButtons(
       session = session, inputId = "gen_exp_crit_type_rb",
       choiceNames =  sessionInfo$df_crit_types$criteria_type_title,
@@ -1993,7 +1996,16 @@ where tc.nct_id = $1"
   )
   
   
-
+  # Download trial data by type ----
+  output$downloadTrialDataByType <- downloadHandler(
+    filename = function() { paste('sec_trial_data_by_type_csv_', Sys.Date(), '.csv', sep = "") }
+    ,
+    content = function(file) {
+      print("writing file")
+      write.csv( sessionInfo$df_trial_criteria_for_type, file, row.names = FALSE)
+    }
+  )
+  
   output$downloadCandData <- downloadHandler(
     filename = function() { paste('sec_candidate_data_csv_', Sys.Date(), '.csv', sep = "") }
     ,

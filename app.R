@@ -499,6 +499,7 @@ server <- function(input, output, session) {
     refresh_criteria_types_counter = 0,
     refresh_criteria_counter = 0,
     df_crit_types = NA,
+    df_crit_types_with_all = NA, 
     df_crit_type_titles = NA,
     df_criteria_nct_id = NA,
     df_crit_with_cands_count = NA,
@@ -544,6 +545,14 @@ server <- function(input, output, session) {
     criteria_type_sense, criteria_column_index 
      from criteria_types order by criteria_column_index"
   
+  crit_type_sql_with_all <-
+    "with rb_vals as 
+     (select -666 as criteria_type_id, 'ALL' as criteria_type_title , -666 as criteria_column_index
+     union 
+     select criteria_type_id, criteria_type_title , criteria_column_index 
+     from criteria_types)
+     select criteria_type_id, criteria_type_title from rb_vals order by criteria_column_index"
+  
   criteria_nct_ids_sql <-
     "select distinct nct_id from trial_criteria order by nct_id"
   
@@ -575,6 +584,26 @@ and (cc.generated_date > cc.marked_done_date or cc.marked_done_date is null)
 order by cc.nct_id 
 "
 
+work_queue_all_types_sql <- "
+ SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
+case
+when cc.inclusion_indicator = true then 'Inclusion: ' || cc.candidate_criteria_text
+when cc.inclusion_indicator = false then 'Exclusion: ' || cc.candidate_criteria_text
+end cand_crit_text,
+cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression
+
+from candidate_criteria cc
+join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
+where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' or 
+replace(tc.trial_criteria_expression,' ' ,'')  <> replace(cc.candidate_criteria_expression,' ' ,'' ) 
+) 
+and cc.candidate_criteria_expression <> 'NO MATCH'
+and (cc.generated_date > cc.marked_done_date or cc.marked_done_date is null) 
+order by cc.nct_id 
+"
+
+
 work_queue_no_industrial_sql <- "
 SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
 case
@@ -592,6 +621,27 @@ replace(tc.trial_criteria_expression,' ' ,'')  <> replace(cc.candidate_criteria_
 ) 
 and cc.candidate_criteria_expression <> 'NO MATCH'  and t.study_source <> 'Industrial'
 and cc.criteria_type_id = $1
+and (cc.generated_date > cc.marked_done_date or cc.marked_done_date is null) 
+order by cc.nct_id
+"
+
+
+work_queue_no_industrial_all_types_sql <- "
+SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
+case
+when cc.inclusion_indicator = true then 'Inclusion: ' || cc.candidate_criteria_text
+when cc.inclusion_indicator = false then 'Exclusion: ' || cc.candidate_criteria_text
+end cand_crit_text,
+cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression
+
+from candidate_criteria cc
+join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+join trials t on cc.nct_id = t.nct_id 
+left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
+where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' or 
+replace(tc.trial_criteria_expression,' ' ,'')  <> replace(cc.candidate_criteria_expression,' ' ,'' ) 
+) 
+and cc.candidate_criteria_expression <> 'NO MATCH'  and t.study_source <> 'Industrial'
 and (cc.generated_date > cc.marked_done_date or cc.marked_done_date is null) 
 order by cc.nct_id
 "
@@ -617,13 +667,25 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
     
     
   if (is.null(input$exclude_industrial_trials_checkbox) ||input$exclude_industrial_trials_checkbox == FALSE ) {
-    this_sql <- work_queue_all_sql
+    if(input$gen_exp_crit_type_rb > -666) {
+      this_sql <- work_queue_all_sql
+      rs <- safe_query(dbGetQuery, this_sql, params = c( input$gen_exp_crit_type_rb))
+    } else {
+      this_sql <- work_queue_all_types_sql
+      rs <- safe_query(dbGetQuery, this_sql)
+    }  
   }
   else {
-    this_sql <- work_queue_no_industrial_sql
+    if(input$gen_exp_crit_type_rb > -666) {
+      this_sql <- work_queue_no_industrial_sql
+      rs <- safe_query(dbGetQuery, this_sql, params = c( input$gen_exp_crit_type_rb))
+    } else {
+      this_sql <- work_queue_no_industrial_all_types_sql
+      rs <- safe_query(dbGetQuery, this_sql)
+      
+    }  
   }
   
-  rs <- safe_query(dbGetQuery, this_sql, params = c( input$gen_exp_crit_type_rb))
   rs$criteria_type_title <- as.factor(rs$criteria_type_title) 
   sessionInfo$df_crit_work_queue <- rs
   
@@ -1088,6 +1150,7 @@ order by cc.nct_id, cc.criteria_type_id "
   
   observe({
     sessionInfo$df_crit_types <- safe_query(dbGetQuery, crit_type_sql)
+    sessionInfo$df_crit_types_with_all <- safe_query(dbGetQuery, crit_type_sql_with_all)
     criteria_types_dt <- datatable(
       sessionInfo$df_crit_types,
       class = 'cell-border stripe compact wrap hover',
@@ -1121,11 +1184,12 @@ order by cc.nct_id, cc.criteria_type_id "
       choices = sessionInfo$df_crit_type_titles$criteria_type_title ,
       server = TRUE
     )
-    #browser()
+    
+   # browser()
     updateRadioGroupButtons(
       session = session, inputId = "gen_exp_crit_type_rb",
-      choiceNames =  sessionInfo$df_crit_types$criteria_type_title,
-      choiceValues = sessionInfo$df_crit_types$criteria_type_id
+      choiceNames =  sessionInfo$df_crit_types_with_all$criteria_type_title,
+      choiceValues = sessionInfo$df_crit_types_with_all$criteria_type_id
     )
     
     criteria_types_titles_dt <- datatable(
@@ -1421,6 +1485,8 @@ order by cc.nct_id, cc.criteria_type_id "
       print("need to refresh criteria types")
       sessionInfo$df_crit_types <- safe_query(dbGetQuery, crit_type_sql)
       sessionInfo$df_crit_type_titles <- safe_query(dbGetQuery, crit_type_titles_sql)
+      sessionInfo$df_crit_types_with_all <- safe_query(dbGetQuery, crit_type_sql_with_all)
+      
       
       # MAYBE
       sessionInfo$df_criteria_nct_id <- safe_query(dbGetQuery, criteria_nct_ids_sql)

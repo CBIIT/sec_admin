@@ -585,15 +585,16 @@ order by cc.nct_id
 "
 
 work_queue_all_types_sql <- "
- SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
+SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
 case
 when cc.inclusion_indicator = true then 'Inclusion: ' || cc.candidate_criteria_text
 when cc.inclusion_indicator = false then 'Exclusion: ' || cc.candidate_criteria_text
 end cand_crit_text,
-cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression
-
+cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression,
+cc.generated_date , tnd.classification_date, tnd.tokenized_date
 from candidate_criteria cc
 join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+join trial_nlp_dates tnd on cc.nct_id = tnd.nct_id 
 left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
 where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' or 
 replace(tc.trial_criteria_expression,' ' ,'')  <> replace(cc.candidate_criteria_expression,' ' ,'' ) 
@@ -610,10 +611,11 @@ case
 when cc.inclusion_indicator = true then 'Inclusion: ' || cc.candidate_criteria_text
 when cc.inclusion_indicator = false then 'Exclusion: ' || cc.candidate_criteria_text
 end cand_crit_text,
-cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression
-
+cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression,
+cc.generated_date , tnd.classification_date, tnd.tokenized_date
 from candidate_criteria cc
 join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+join trial_nlp_dates tnd on cc.nct_id = tnd.nct_id 
 join trials t on cc.nct_id = t.nct_id 
 left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
 where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' or 
@@ -632,10 +634,11 @@ case
 when cc.inclusion_indicator = true then 'Inclusion: ' || cc.candidate_criteria_text
 when cc.inclusion_indicator = false then 'Exclusion: ' || cc.candidate_criteria_text
 end cand_crit_text,
-cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression
-
+cc.candidate_criteria_norm_form, cc.candidate_criteria_expression , tc.trial_criteria_expression,
+cc.generated_date , tnd.classification_date, tnd.tokenized_date
 from candidate_criteria cc
 join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+join trial_nlp_dates tnd on cc.nct_id = tnd.nct_id 
 join trials t on cc.nct_id = t.nct_id 
 left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
 where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' or 
@@ -704,7 +707,10 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
                   'Criteria Text',
                  'Normal Form',
                  'Generated Expression (new)',
-                 'Current Expression'
+                 'Current Expression',
+                 'Exp Generated Date',
+                 'Classification Date',
+                 'Tokenized Date'
                  ),
     options = list(
       info = TRUE,

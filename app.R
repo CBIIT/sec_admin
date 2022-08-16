@@ -300,7 +300,13 @@ ui <- secure_app(
           column( 
             6, textInput("genexp_nctid", "NCT ID")),
           column(
-            6, textInput("genexp_crit_type", "Criteria Type"))
+            6, selectizeInput(
+              "genexp_type_typer",
+              label = "Criteria Type",
+              NULL,
+              multiple = FALSE
+            )
+          )
         ),
         fluidRow(
           textAreaInput('genexp_crit_text',"Description", width = '100%', height = '200px')  %>%
@@ -964,7 +970,9 @@ observeEvent(input$do_work_queue_item, {
     sessionInfo$work_queue_row_df <- sessionInfo$df_crit_work_queue[row_to_process,]
    # print(rowdf)
     updateTextInput(session, 'genexp_nctid', value = sessionInfo$work_queue_row_df$nct_id)
-    updateTextInput(session, 'genexp_crit_type', value = sessionInfo$work_queue_row_df$criteria_type_title)
+   # updateTextInput(session, 'genexp_crit_type', value = sessionInfo$work_queue_row_df$criteria_type_title)
+    updateSelectizeInput(session, 'genexp_type_typer', 
+                         selected=  sessionInfo$work_queue_row_df$criteria_type_title)
     updateTextInput(session, 'genexp_crit_text', value = sessionInfo$work_queue_row_df$cand_crit_text)
     updateTextInput(session, 'genexp_norm_form', value = sessionInfo$work_queue_row_df$candidate_criteria_norm_form)
     updateTextInput(session, 'genexp_gen_expression', value = sessionInfo$work_queue_row_df$candidate_criteria_expression)
@@ -1007,14 +1015,19 @@ observeEvent(input$genexp_save, {
   insert_a_crit_sql <- 'insert into trial_criteria(nct_id, criteria_type_id, trial_criteria_orig_text,
                        trial_criteria_refined_text, trial_criteria_expression, update_date, update_by) 
                        values($1,$2,$3,$4,$5,now(),$6)'
+  wq_type_row_df <- sessionInfo$df_crit_type_titles[sessionInfo$df_crit_type_titles$criteria_type_title == input$genexp_type_typer,]
   
 
   # Also update the criteria used for matching
   num_crits <- safe_query(dbGetQuery, is_there_a_crit_sql,
                   params = c(sessionInfo$work_queue_row_df$nct_id,
-                             sessionInfo$work_queue_row_df$criteria_type_id) )
+                             wq_type_row_df$criteria_type_id) )
   print(paste("there are ", num_crits$num_recs , " records "))
 
+  #browser()
+  
+  #Note need to mark the candidate criteria itself with the existiing critieria type
+  # as marked done to make it stop showing back up (in case the criteria type was changed) 
   rs <- safe_query(dbExecute, update_mark_done_date_sql, 
                   params = c(#Sys.time(),
                              sessionInfo$work_queue_row_df$nct_id, 
@@ -1024,7 +1037,7 @@ observeEvent(input$genexp_save, {
     print('need to insert')
     rs <- safe_query(dbExecute, insert_a_crit_sql,
                     params = c(sessionInfo$work_queue_row_df$nct_id,
-                               sessionInfo$work_queue_row_df$criteria_type_id,
+                               wq_type_row_df$criteria_type_id,
                                sessionInfo$work_queue_row_df$cand_crit_text,
                                sessionInfo$work_queue_row_df$candidate_criteria_norm_form,
                                input$genexp_current_expression,
@@ -1040,7 +1053,7 @@ observeEvent(input$genexp_save, {
                             # Sys.time(),
                              sessionInfo$result_auth$user,
                              sessionInfo$work_queue_row_df$nct_id,
-                             sessionInfo$work_queue_row_df$criteria_type_id ))
+                             wq_type_row_df$criteria_type_id ))
   } 
   sessionInfo$refresh_criteria_counter <- sessionInfo$refresh_criteria_counter + 1
   sessionInfo$refresh_work_queue_counter <- sessionInfo$refresh_work_queue_counter + 1
@@ -1187,6 +1200,13 @@ order by cc.nct_id, cc.criteria_type_id "
     updateSelectizeInput(
       session,
       'criteria_type_typer',
+      choices = sessionInfo$df_crit_type_titles$criteria_type_title ,
+      server = TRUE
+    )
+    
+    updateSelectizeInput(
+      session,
+      'genexp_type_typer',
       choices = sessionInfo$df_crit_type_titles$criteria_type_title ,
       server = TRUE
     )

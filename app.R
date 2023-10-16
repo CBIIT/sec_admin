@@ -470,7 +470,17 @@ ui <- secure_app(
                                 'padding:4px; font-size:80%')
       
                  
-               )
+               ),
+      tabPanel(
+        "Synthea Test Data",
+        sidebarLayout(
+          sidebarPanel(
+            DTOutput("synthea_codes_name"),
+          ),
+          mainPanel(DTOutput("synthea_data_by_code"),
+                    downloadButton("downloadSyntheaTestDataByCode", "Download Synthea Test Data", style =
+                                     'padding:4px; font-size:80%'))
+        ))
                
                
         
@@ -515,7 +525,8 @@ server <- function(input, output, session) {
     work_queue_row_df = NA,
     tokenizerData = NA,
     ncit_path_data = NA,
-    crit_work_queue_dt = NA
+    crit_work_queue_dt = NA,
+    df_synthea_codes_name = NA
   )
   
   sessionInfo$result_auth <-
@@ -2126,10 +2137,84 @@ where tc.nct_id = $1"
     }
   )
   
+  # Synthea Test Data tab
+  observe({
+    synthea_codes_name_sql <- "select code, name, count(*) as c
+        from testdata.synthea_test_codes inner join testdata.synthea_test_data on testdata.synthea_test_codes.code=testdata.synthea_test_data.raw_concept_code
+        group by code, name order by c desc;"
+    sessionInfo$df_synthea_codes_name <- safe_query(dbGetQuery, synthea_codes_name_sql)
+
+    synthea_codes_name_dt <- datatable(
+      sessionInfo$df_synthea_codes_name,
+      class = 'cell-border stripe compact wrap hover',
+      selection = 'single',
+      colnames = c('Code', 'Code Name', 'Patient Count'),
+      options = list(
+        escape = FALSE,
+        searching = FALSE,
+        paging = TRUE,
+        info = FALSE,
+        columnDefs = list(# Initially hidden columns
+          list(
+            visible = FALSE,
+            targets = c(0, 1, 0)
+          ))
+      )
+    )
+    
+    output$synthea_codes_name <-
+      DT::renderDataTable({
+        synthea_codes_name_dt
+      })
+    
+  })
   
+  # Onclick handler for when a Code in the Synthea Test Data tab is clicked;
+  # queries and renders Synthea test data matching that code.
+  observeEvent(input$synthea_codes_name_rows_selected, {
+    if (!is.null(input$synthea_codes_name_rows_selected)) {
+      code <- sessionInfo$df_synthea_codes_name$code[[input$synthea_codes_name_rows_selected]]
+      test_data_sql <- "select ptnum, raw_concept_code, raw_value, vocabulary_id, actual_concept_code, concept_cd, valtype_cd, tval_char, nval_num
+          from testdata.synthea_test_data where raw_concept_code = $1"
+      sessionInfo$df_synthea_data <- safe_query(dbGetQuery, test_data_sql, params = c(code))
+      
+      synthea_data_dt <-
+        datatable(
+          sessionInfo$df_synthea_data,
+          class = 'cell-border stripe compact wrap hover',
+          selection = 'single',
+          width  = "90vw",
+          colnames = c(
+            'ptnum',
+            'raw_concept_code',
+            'raw_value',
+            'vocabulary_id',
+            'actual_concept_code',
+            'concept_cd',
+            'valtype_cd',
+            'tval_char',
+            'nval_num'
+          ),
+          options = list(
+            info = TRUE,
+            searching = TRUE,
+            autoWidth = TRUE,
+            scrollX = TRUE,
+            deferRender = TRUE,
+            scrollY = "45vh",
+            scrollCollapse = TRUE,
+            paging = TRUE,
+            style = "overflow-y: scroll"
+          )
+        )
+      output$synthea_data_by_code <-
+        DT::renderDataTable({
+          synthea_data_dt
+        })
+    }
+  }, ignoreNULL = TRUE)
   
 }
-
 
 
 shinyApp(ui = ui, server = server)

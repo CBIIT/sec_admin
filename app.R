@@ -476,21 +476,21 @@ ui <- secure_app(
         sidebarLayout(
           sidebarPanel(
             DTOutput("synthea_codes_name"),
+            downloadButton("downloadSyntheaTestCodes", "Download Synthea Codes Data", style = 'padding:4px; font-size:80%')
           ),
-#          mainPanel(DTOutput("synthea_data_by_code")),
-#                    downloadButton("downloadSyntheaTestDataByCode", "Download Synthea Test Data", style =
-#                                     'padding:4px; font-size:80%'))
           mainPanel(fluidRow(column(12,
               h4(textOutput("synthea_data_by_code_panel_title")),
               hr(),
-              DTOutput("synthea_data_by_code"))
-          ))
+              DTOutput("synthea_data_by_code"),
+              downloadButton("downloadSyntheaDataByCode", "Download Synthea Data (by code)", style = 'padding:4px; font-size:80%;')
+          )))
         ),
         mainPanel(fluidRow(column(12,
             h4(textOutput("synthea_data_by_patient_panel_title")),
             hr(),
-            DTOutput("synthea_data_by_patient"))
-            ))
+            DTOutput("synthea_data_by_patient"),
+            downloadButton("downloadSyntheaDataByPatient", "Download Synthea Data (by patient)", style = 'padding:4px; font-size:80%;')
+            )))
         )
         
                
@@ -2181,15 +2181,23 @@ where tc.nct_id = $1"
     
   })
   
+  output$downloadSyntheaTestCodes <- downloadHandler(
+    filename = function() { paste('sec_synthea_codes_data_', Sys.Date(), '.csv', sep = '') }
+    ,
+    content = function(file) {
+      write.csv(sessionInfo$df_synthea_codes_name, file, row.names = FALSE)
+    }
+  )
+  
   # Onclick handler for when a Code in the Synthea Test Data tab is clicked;
   # queries and renders Synthea test data matching that code.
   observeEvent(input$synthea_codes_name_rows_selected, {
     if (!is.null(input$synthea_codes_name_rows_selected)) {
       name <- sessionInfo$df_synthea_codes_name$name[[input$synthea_codes_name_rows_selected]]
-      code <- sessionInfo$df_synthea_codes_name$code[[input$synthea_codes_name_rows_selected]]
+      sessionInfo$synthea_code <- sessionInfo$df_synthea_codes_name$code[[input$synthea_codes_name_rows_selected]]
       test_data_sql <- "select ptnum, raw_concept_code, raw_value, vocabulary_id, actual_concept_code, concept_cd, valtype_cd, tval_char, nval_num
           from testdata.synthea_test_data where raw_concept_code = $1"
-      sessionInfo$df_synthea_data <- safe_query(dbGetQuery, test_data_sql, params = c(code))
+      sessionInfo$df_synthea_data <- safe_query(dbGetQuery, test_data_sql, params = c(sessionInfo$synthea_code))
       
       synthea_data_dt <-
         datatable(
@@ -2222,27 +2230,42 @@ where tc.nct_id = $1"
         )
       output$synthea_data_by_code <-
         DT::renderDataTable({
-          synthea_data_dt
+          synthea_data_dt %>%
+            
+              # Format the patient ID column as a link, to emphasize that clicking on
+              # a row shows a new table of patient-level data.
+              formatStyle('ptnum', textDecoration = 'underline', cursor = 'pointer', color = 'blue')
         })
     }
     
-    output$synthea_data_by_code_panel_title <- renderText(sprintf('Synthea Data for Code %s (%s) ', code, name))
+    output$synthea_data_by_code_panel_title <- renderText(sprintf('Synthea Data for Code %s (%s) ', sessionInfo$synthea_code, name))
+    
+    # TODO(jcallaway: figure out why initially hidden download buttons don't appear from here
+#    show('downloadSyntheaDataByCode')
   }, ignoreNULL = TRUE)
+  
+  output$downloadSyntheaDataByCode <- downloadHandler(
+    filename = function() { sprintf('sec_synthea_data_by_code_%s_%s.csv', sessionInfo$synthea_code, Sys.Date()) }
+    ,
+    content = function(file) {
+      write.csv(sessionInfo$df_synthea_data, file, row.names = FALSE)
+    }
+  )
   
   # Onclick handler for when a Patient in the Synthea Test Data tab is clicked;
   # queries and renders Synthea test data matching that patient.
   observeEvent(input$synthea_data_by_code_rows_selected, {
     if (!is.null(input$synthea_data_by_code_rows_selected)) {
-      patient_id <- sessionInfo$df_synthea_data$ptnum[[input$synthea_data_by_code_rows_selected]]
+      sessionInfo$patient_id <- sessionInfo$df_synthea_data$ptnum[[input$synthea_data_by_code_rows_selected]]
       patient_data_sql <- "select raw_concept_code, raw_value, vocabulary_id, actual_concept_code, concept_cd, valtype_cd, tval_char, nval_num
           from testdata.synthea_test_data where ptnum = $1"
-      sessionInfo$df_synthea_patient_data <- safe_query(dbGetQuery, patient_data_sql, params = c(patient_id))
+      sessionInfo$df_synthea_patient_data <- safe_query(dbGetQuery, patient_data_sql, params = c(sessionInfo$patient_id))
       
       synthea_patient_data_dt <-
         datatable(
           sessionInfo$df_synthea_patient_data,
           class = 'cell-border stripe compact wrap hover',
-          selection = 'single',
+          selection = 'none',
           width  = "90vw",
           colnames = c(
             'raw_concept_code',
@@ -2271,10 +2294,18 @@ where tc.nct_id = $1"
           synthea_patient_data_dt
         })
       
-      output$synthea_data_by_patient_panel_title <- renderText(paste('Synthea Data for Patient ', patient_id, sep = ''))
+      output$synthea_data_by_patient_panel_title <- renderText(paste('Synthea Data for Patient ', sessionInfo$patient_id, sep = ''))
+#      show('downloadSyntheaDataByPatient')
     }
   }, ignoreNULL = TRUE)
+  
+  output$downloadSyntheaDataByPatient <- downloadHandler(
+    filename = function() { sprintf('sec_synthea_data_by_patient_%s_%s.csv', sessionInfo$patient_id, Sys.Date()) }
+    ,
+    content = function(file) {
+      write.csv(sessionInfo$df_synthea_patient_data, file, row.names = FALSE)
+    }
+  )
 }
-
 
 shinyApp(ui = ui, server = server)

@@ -2,3 +2,8 @@ default:
     db_file_location : Location of sqlite app database file
     db_user_file: location of sqlite authentication database file 
     passphrase: passphrase of sqlite authentication database file 
+    dbname : 'sec'
+    host : 'localhost'
+    user : 'secapp'
+    port : 5432
+    password: 'real DB password'

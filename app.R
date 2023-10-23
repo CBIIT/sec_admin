@@ -2151,19 +2151,19 @@ where tc.nct_id = $1"
   
   # Synthea Test Data tab
   observe({
-    synthea_codes_name_sql <- "select code, name, count(*) as c
+    synthea_codes_name_sql <- "select code, name, vocabulary_id, count(*) as c
         from testdata.synthea_test_codes inner join testdata.synthea_test_data on testdata.synthea_test_codes.code=testdata.synthea_test_data.raw_concept_code
-        group by code, name order by c desc;"
+        group by code, name, vocabulary_id order by c desc;"
     sessionInfo$df_synthea_codes_name <- safe_query(dbGetQuery, synthea_codes_name_sql)
 
     synthea_codes_name_dt <- datatable(
       sessionInfo$df_synthea_codes_name,
       class = 'cell-border stripe compact wrap hover',
       selection = 'single',
-      colnames = c('Code', 'Code Name', 'Patient Count'),
+      colnames = c('Code', 'Code Name', 'Vocabulary ID', 'Patient Count'),
       options = list(
         escape = FALSE,
-        searching = FALSE,
+        searching = TRUE,
         paging = TRUE,
         info = FALSE,
         columnDefs = list(# Initially hidden columns
@@ -2225,6 +2225,7 @@ where tc.nct_id = $1"
             scrollY = "45vh",
             scrollCollapse = TRUE,
             paging = TRUE,
+            pageLength = 25,
             style = "overflow-y: scroll"
           )
         )
@@ -2286,6 +2287,7 @@ where tc.nct_id = $1"
             scrollY = "45vh",
             scrollCollapse = TRUE,
             paging = TRUE,
+            pageLength = 25,
             style = "overflow-y: scroll"
           )
         )

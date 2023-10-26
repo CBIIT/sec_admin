@@ -34,6 +34,7 @@ library(RPostgres)
 
 source('eval_prior_therapy_app.R')
 source('check_if_any.R')
+source('synthea.R')
 dbinfo <- config::get()
 
 local_dbname <- dbinfo$dbname
@@ -472,7 +473,9 @@ ui <- secure_app(
                  
                ),
       tabPanel(
-        "Synthea Test Data",
+        
+        # TODO: get the patient count dynamically if it changes.
+        "Synthea Test Data (for 4,221 Synthetic Patients)",
         sidebarLayout(
           sidebarPanel(
             DTOutput("synthea_codes_name"),
@@ -2195,9 +2198,17 @@ where tc.nct_id = $1"
     if (!is.null(input$synthea_codes_name_rows_selected)) {
       name <- sessionInfo$df_synthea_codes_name$name[[input$synthea_codes_name_rows_selected]]
       sessionInfo$synthea_code <- sessionInfo$df_synthea_codes_name$code[[input$synthea_codes_name_rows_selected]]
-      test_data_sql <- "select ptnum, raw_concept_code, raw_value, vocabulary_id, actual_concept_code, concept_cd, valtype_cd, tval_char, nval_num
-          from testdata.synthea_test_data where raw_concept_code = $1"
+      test_data_sql <- "select ptnum, raw_concept_code, vocabulary_id, concept_cd, name, valtype_cd, tval_char, nval_num
+          from testdata.synthea_test_data inner join testdata.synthea_test_codes
+              on testdata.synthea_test_data.raw_concept_code = testdata.synthea_test_codes.code
+          where raw_concept_code = $1"
       sessionInfo$df_synthea_data <- safe_query(dbGetQuery, test_data_sql, params = c(sessionInfo$synthea_code))
+      
+      # Calculate a "value" column based on valtype_cd, tval_char, and nval_num,
+      # and then delete those columns.
+      sessionInfo$df_synthea_data$value <- apply(sessionInfo$df_synthea_data, 1,
+          FUN = function(x) create_value(x[6], x[7], x[8], x[5]))
+      sessionInfo$df_synthea_data <- subset(sessionInfo$df_synthea_data, select = -c(valtype_cd, tval_char, nval_num))
       
       synthea_data_dt <-
         datatable(
@@ -2206,15 +2217,12 @@ where tc.nct_id = $1"
           selection = 'single',
           width  = "90vw",
           colnames = c(
-            'ptnum',
-            'raw_concept_code',
-            'raw_value',
-            'vocabulary_id',
-            'actual_concept_code',
-            'concept_cd',
-            'valtype_cd',
-            'tval_char',
-            'nval_num'
+            'Patient Num',
+            'Concept Code',
+            'Vocabulary ID',
+            'Concept CD',
+            'Name',
+            'Value'
           ),
           options = list(
             info = TRUE,
@@ -2258,9 +2266,17 @@ where tc.nct_id = $1"
   observeEvent(input$synthea_data_by_code_rows_selected, {
     if (!is.null(input$synthea_data_by_code_rows_selected)) {
       sessionInfo$patient_id <- sessionInfo$df_synthea_data$ptnum[[input$synthea_data_by_code_rows_selected]]
-      patient_data_sql <- "select raw_concept_code, raw_value, vocabulary_id, actual_concept_code, concept_cd, valtype_cd, tval_char, nval_num
-          from testdata.synthea_test_data where ptnum = $1"
+      patient_data_sql <- "select raw_concept_code, vocabulary_id, concept_cd, name, valtype_cd, tval_char, nval_num
+          from testdata.synthea_test_data inner join testdata.synthea_test_codes
+              on testdata.synthea_test_data.raw_concept_code = testdata.synthea_test_codes.code
+          where ptnum = $1"
       sessionInfo$df_synthea_patient_data <- safe_query(dbGetQuery, patient_data_sql, params = c(sessionInfo$patient_id))
+      
+      # Calculate a "value" column based on valtype_cd, tval_char, and nval_num,
+      # and then delete those columns.
+      sessionInfo$df_synthea_patient_data$value <- apply(sessionInfo$df_synthea_patient_data, 1,
+          FUN = function(x) create_value(x[5], x[6], x[7], x[4]))
+      sessionInfo$df_synthea_patient_data <- subset(sessionInfo$df_synthea_patient_data, select = -c(valtype_cd, tval_char, nval_num))
       
       synthea_patient_data_dt <-
         datatable(
@@ -2269,14 +2285,11 @@ where tc.nct_id = $1"
           selection = 'none',
           width  = "90vw",
           colnames = c(
-            'raw_concept_code',
-            'raw_value',
-            'vocabulary_id',
-            'actual_concept_code',
-            'concept_cd',
-            'valtype_cd',
-            'tval_char',
-            'nval_num'
+            'Concept Code',
+            'Vocabulary ID',
+            'Concept CD',
+            'Name',
+            'Value'
           ),
           options = list(
             info = TRUE,

@@ -2225,16 +2225,10 @@ where tc.nct_id = $1"
             'Value'
           ),
           options = list(
-            info = TRUE,
+            escape = FALSE,
             searching = TRUE,
-            autoWidth = TRUE,
-            scrollX = TRUE,
-            deferRender = TRUE,
-            scrollY = "45vh",
-            scrollCollapse = TRUE,
             paging = TRUE,
-            pageLength = 25,
-            style = "overflow-y: scroll"
+            info = FALSE
           )
         )
       output$synthea_data_by_code <-
@@ -2292,16 +2286,10 @@ where tc.nct_id = $1"
             'Value'
           ),
           options = list(
-            info = TRUE,
+            escape = FALSE,
             searching = TRUE,
-            autoWidth = TRUE,
-            scrollX = TRUE,
-            deferRender = TRUE,
-            scrollY = "45vh",
-            scrollCollapse = TRUE,
             paging = TRUE,
-            pageLength = 25,
-            style = "overflow-y: scroll"
+            info = FALSE
           )
         )
       output$synthea_data_by_patient <-

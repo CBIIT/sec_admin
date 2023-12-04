@@ -32,6 +32,8 @@ library(writexl)
 library(pool)
 library(RPostgres)
 
+options(show.error.locations = TRUE)
+
 source('eval_prior_therapy_app.R')
 source('check_if_any.R')
 source('synthea.R')
@@ -473,36 +475,21 @@ ui <- secure_app(
                  
                ),
       tabPanel(
-        
-        # TODO: get the patient count dynamically if it changes.
-        "Synthea Test Data (for 4,221 Synthetic Patients)",
-        sidebarLayout(
-          sidebarPanel(
-            DTOutput("synthea_codes_name"),
-            downloadButton("downloadSyntheaTestCodes", "Download Synthea Codes Data", style = 'padding:4px; font-size:80%')
-          ),
+        "Synthea Patients (Breast Cancer)",
           mainPanel(fluidRow(column(12,
-              h4(textOutput("synthea_data_by_code_panel_title")),
+              h4("Synthea Patients"),
               hr(),
-              DTOutput("synthea_data_by_code"),
-              downloadButton("downloadSyntheaDataByCode", "Download Synthea Data (by code)", style = 'padding:4px; font-size:80%;')
+              DTOutput("synthea_patients"),
+              downloadButton("downloadSyntheaPatients", "Download Data", style = 'padding:4px; font-size:80%;')
           )))
         ),
         mainPanel(fluidRow(column(12,
-            h4(textOutput("synthea_data_by_patient_panel_title")),
+            h4(textOutput("synthea_conditions_title")),
             hr(),
-            DTOutput("synthea_data_by_patient"),
-            downloadButton("downloadSyntheaDataByPatient", "Download Synthea Data (by patient)", style = 'padding:4px; font-size:80%;')
-            )))
-        )
-        
-               
-               
-        
-               
-   
-      
-      
+            DTOutput("synthea_conditions"),
+            downloadButton("downloadSyntheaConditions", "Download Data", style = 'padding:4px; font-size:80%;')
+            ))
+        ),
     )
   )
   ,
@@ -2152,34 +2139,49 @@ where tc.nct_id = $1"
     }
   )
   
-  # Synthea Test Data tab
+  # Synthea tab
   observe({
-    synthea_codes_name_sql <- "select code, name, vocabulary_id, count(*) as c
-        from testdata.synthea_test_codes inner join testdata.synthea_test_data on testdata.synthea_test_codes.code=testdata.synthea_test_data.raw_concept_code
-        group by code, name, vocabulary_id order by c desc;"
-    sessionInfo$df_synthea_codes_name <- safe_query(dbGetQuery, synthea_codes_name_sql)
+    synthea_patients_sql <- "select id, name, gender, date_part('year', age(now(), dob)) as age,
+        case when marital_status = 'M' then 'married' when marital_status = 'D' then 'divorced' when marital_status = 'S' then 'single' end as marital,
+        race, ethnicity
+        from fhir_etl.patient order by id"
+    sessionInfo$df_synthea_patients <- safe_query(dbGetQuery, synthea_patients_sql)
 
-    synthea_codes_name_dt <- datatable(
-      sessionInfo$df_synthea_codes_name,
-      class = 'cell-border stripe compact wrap hover',
-      selection = 'single',
-      colnames = c('Code', 'Code Name', 'Vocabulary ID', 'Patient Count'),
-      options = list(
-        escape = FALSE,
-        searching = TRUE,
-        paging = TRUE,
-        info = FALSE,
-        columnDefs = list(# Initially hidden columns
-          list(
-            visible = FALSE,
-            targets = c(0, 1, 0)
-          ))
+    synthea_patients_dt <-
+      datatable(
+        sessionInfo$df_synthea_patients,
+        class = 'cell-border stripe compact wrap hover',
+        selection = 'single',
+        width  = "90vw",
+        colnames = c(
+          'ID',
+          'Name',
+          'Gender',
+          'Age',
+          'Marital Status',
+          'Race',
+          'Ethnicity'
+        ),
+        options = list(
+          escape = FALSE,
+          searching = TRUE,
+          paging = TRUE,
+          info = FALSE,
+          columnDefs = list(  # Initially hidden columns
+            list(
+              visible = FALSE,
+              targets = c(0, 1, 0)
+            ))
+        )
       )
-    )
     
-    output$synthea_codes_name <-
+    output$synthea_patients <-
       DT::renderDataTable({
-        synthea_codes_name_dt
+        synthea_patients_dt %>%
+          
+          # Format the name column as a link, to emphasize that clicking on
+          # a row shows a new table of patient-level data.
+          formatStyle('name', textDecoration = 'underline', cursor = 'pointer', color = 'blue')
       })
     
   })
@@ -2192,37 +2194,32 @@ where tc.nct_id = $1"
     }
   )
   
-  # Onclick handler for when a Code in the Synthea Test Data tab is clicked;
-  # queries and renders Synthea test data matching that code.
-  observeEvent(input$synthea_codes_name_rows_selected, {
-    if (!is.null(input$synthea_codes_name_rows_selected)) {
-      name <- sessionInfo$df_synthea_codes_name$name[[input$synthea_codes_name_rows_selected]]
-      sessionInfo$synthea_code <- sessionInfo$df_synthea_codes_name$code[[input$synthea_codes_name_rows_selected]]
-      test_data_sql <- "select ptnum, raw_concept_code, vocabulary_id, concept_cd, name, valtype_cd, tval_char, nval_num
-          from testdata.synthea_test_data inner join testdata.synthea_test_codes
-              on testdata.synthea_test_data.raw_concept_code = testdata.synthea_test_codes.code
-          where raw_concept_code = $1"
-      sessionInfo$df_synthea_data <- safe_query(dbGetQuery, test_data_sql, params = c(sessionInfo$synthea_code))
+  # Onclick handler for when a patient is clicked
+  observeEvent(input$synthea_patients_rows_selected, {
+    if (!is.null(input$synthea_patients_rows_selected)) {
+      name <- sessionInfo$df_synthea_patients$name[[input$synthea_patients_rows_selected]]
+      sessionInfo$synthea_patient_id <- sessionInfo$df_synthea_patients$id[[input$synthea_patients_rows_selected]]
       
-      # Calculate a "value" column based on valtype_cd, tval_char, and nval_num,
-      # and then delete those columns.
-      sessionInfo$df_synthea_data$value <- apply(sessionInfo$df_synthea_data, 1,
-          FUN = function(x) create_value(x[6], x[7], x[8], x[5]))
-      sessionInfo$df_synthea_data <- subset(sessionInfo$df_synthea_data, select = -c(valtype_cd, tval_char, nval_num))
+#      browser()
+
+      synthea_conditions_sql <- "select condition_date::date as date, 'condition' as type, code, name
+          from fhir_etl.condition where patient_id = $1
+          union select procedure_date::date as date, 'procedure' as type, code, display as name
+          from fhir_etl.procedure where patient_id = $2
+          order by date desc"
+      sessionInfo$df_synthea_conditions <- safe_query(dbGetQuery, synthea_conditions_sql, params = c(sessionInfo$synthea_patient_id, sessionInfo$synthea_patient_id))
       
-      synthea_data_dt <-
+      synthea_conditions_dt <-
         datatable(
-          sessionInfo$df_synthea_data,
+          sessionInfo$df_synthea_conditions,
           class = 'cell-border stripe compact wrap hover',
           selection = 'single',
           width  = "90vw",
           colnames = c(
-            'Patient Num',
-            'Concept Code',
-            'Vocabulary ID',
-            'Concept CD',
-            'Name',
-            'Value'
+            'Date',
+            'Type',
+            'SNOMED CT',
+            'Description'
           ),
           options = list(
             escape = FALSE,
@@ -2231,17 +2228,16 @@ where tc.nct_id = $1"
             info = FALSE
           )
         )
-      output$synthea_data_by_code <-
+      output$synthea_conditions <-
         DT::renderDataTable({
-          synthea_data_dt %>%
+          synthea_conditions_dt #%>%
             
-              # Format the patient ID column as a link, to emphasize that clicking on
-              # a row shows a new table of patient-level data.
-              formatStyle('ptnum', textDecoration = 'underline', cursor = 'pointer', color = 'blue')
+              # TODO: highlight cancer-related rows
+              #formatStyle('ptnum', textDecoration = 'underline', cursor = 'pointer', color = 'blue')
         })
     }
     
-    output$synthea_data_by_code_panel_title <- renderText(sprintf('Synthea Data for Code %s (%s) ', sessionInfo$synthea_code, name))
+    output$synthea_conditions_title <- renderText(sprintf('Conditions and Procedures for %s', name))
     
     # TODO(jcallaway: figure out why initially hidden download buttons don't appear from here
 #    show('downloadSyntheaDataByCode')
@@ -2254,61 +2250,7 @@ where tc.nct_id = $1"
       write.csv(sessionInfo$df_synthea_data, file, row.names = FALSE)
     }
   )
-  
-  # Onclick handler for when a Patient in the Synthea Test Data tab is clicked;
-  # queries and renders Synthea test data matching that patient.
-  observeEvent(input$synthea_data_by_code_rows_selected, {
-    if (!is.null(input$synthea_data_by_code_rows_selected)) {
-      sessionInfo$patient_id <- sessionInfo$df_synthea_data$ptnum[[input$synthea_data_by_code_rows_selected]]
-      patient_data_sql <- "select raw_concept_code, vocabulary_id, concept_cd, name, valtype_cd, tval_char, nval_num
-          from testdata.synthea_test_data inner join testdata.synthea_test_codes
-              on testdata.synthea_test_data.raw_concept_code = testdata.synthea_test_codes.code
-          where ptnum = $1"
-      sessionInfo$df_synthea_patient_data <- safe_query(dbGetQuery, patient_data_sql, params = c(sessionInfo$patient_id))
-      
-      # Calculate a "value" column based on valtype_cd, tval_char, and nval_num,
-      # and then delete those columns.
-      sessionInfo$df_synthea_patient_data$value <- apply(sessionInfo$df_synthea_patient_data, 1,
-          FUN = function(x) create_value(x[5], x[6], x[7], x[4]))
-      sessionInfo$df_synthea_patient_data <- subset(sessionInfo$df_synthea_patient_data, select = -c(valtype_cd, tval_char, nval_num))
-      
-      synthea_patient_data_dt <-
-        datatable(
-          sessionInfo$df_synthea_patient_data,
-          class = 'cell-border stripe compact wrap hover',
-          selection = 'none',
-          width  = "90vw",
-          colnames = c(
-            'Concept Code',
-            'Vocabulary ID',
-            'Concept CD',
-            'Name',
-            'Value'
-          ),
-          options = list(
-            escape = FALSE,
-            searching = TRUE,
-            paging = TRUE,
-            info = FALSE
-          )
-        )
-      output$synthea_data_by_patient <-
-        DT::renderDataTable({
-          synthea_patient_data_dt
-        })
-      
-      output$synthea_data_by_patient_panel_title <- renderText(paste('Synthea Data for Patient ', sessionInfo$patient_id, sep = ''))
-#      show('downloadSyntheaDataByPatient')
-    }
-  }, ignoreNULL = TRUE)
-  
-  output$downloadSyntheaDataByPatient <- downloadHandler(
-    filename = function() { sprintf('sec_synthea_data_by_patient_%s_%s.csv', sessionInfo$patient_id, Sys.Date()) }
-    ,
-    content = function(file) {
-      write.csv(sessionInfo$df_synthea_patient_data, file, row.names = FALSE)
-    }
-  )
 }
 
+#options(shiny.port = 8888)
 shinyApp(ui = ui, server = server)

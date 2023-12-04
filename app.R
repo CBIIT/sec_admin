@@ -2202,9 +2202,9 @@ where tc.nct_id = $1"
       
 #      browser()
 
-      synthea_conditions_sql <- "select condition_date::date as date, 'condition' as type, code, name
+      synthea_conditions_sql <- "select cancer_related, condition_date::date as date, 'condition' as type, code, name
           from fhir_etl.condition where patient_id = $1
-          union select procedure_date::date as date, 'procedure' as type, code, display as name
+          union select cancer_related, procedure_date::date as date, 'procedure' as type, code, display as name
           from fhir_etl.procedure where patient_id = $2
           order by date desc"
       sessionInfo$df_synthea_conditions <- safe_query(dbGetQuery, synthea_conditions_sql, params = c(sessionInfo$synthea_patient_id, sessionInfo$synthea_patient_id))
@@ -2216,6 +2216,7 @@ where tc.nct_id = $1"
           selection = 'single',
           width  = "90vw",
           colnames = c(
+            'Cancer Related',
             'Date',
             'Type',
             'SNOMED CT',
@@ -2225,15 +2226,19 @@ where tc.nct_id = $1"
             escape = FALSE,
             searching = TRUE,
             paging = TRUE,
-            info = FALSE
+            info = FALSE,
+            
+            # Highlight rows that seem cancer related.
+            rowCallback = JS('function(synRow, synData) {
+                                if (synData[1] == true) {
+                                  $(synRow).css("background-color", "#ffa");
+                                }
+                             }')
           )
         )
       output$synthea_conditions <-
         DT::renderDataTable({
-          synthea_conditions_dt #%>%
-            
-              # TODO: highlight cancer-related rows
-              #formatStyle('ptnum', textDecoration = 'underline', cursor = 'pointer', color = 'blue')
+          synthea_conditions_dt
         })
     }
     

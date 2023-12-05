@@ -32,7 +32,7 @@ library(writexl)
 library(pool)
 library(RPostgres)
 
-options(show.error.locations = TRUE)
+#options(show.error.locations = TRUE)
 
 source('eval_prior_therapy_app.R')
 source('check_if_any.R')
@@ -490,6 +490,13 @@ ui <- secure_app(
             downloadButton("downloadSyntheaConditions", "Download Data", style = 'padding:4px; font-size:80%;')
             ))
         ),
+        mainPanel(fluidRow(column(12,
+          h4(textOutput("synthea_observations_title")),
+          hr(),
+          DTOutput("synthea_observations"),
+          downloadButton("downloadSyntheaObservations", "Download Data", style = 'padding:4px; font-size:80%;')
+      ))
+      ),
     )
   )
   ,
@@ -2186,11 +2193,10 @@ where tc.nct_id = $1"
     
   })
   
-  output$downloadSyntheaTestCodes <- downloadHandler(
-    filename = function() { paste('sec_synthea_codes_data_', Sys.Date(), '.csv', sep = '') }
-    ,
+  output$downloadSyntheaPatients <- downloadHandler(
+    filename = function() { paste('sec_synthea_patients_data_', Sys.Date(), '.csv', sep = '') },
     content = function(file) {
-      write.csv(sessionInfo$df_synthea_codes_name, file, row.names = FALSE)
+      write.csv(sessionInfo$df_synthea_patients, file, row.names = FALSE)
     }
   )
   
@@ -2199,8 +2205,6 @@ where tc.nct_id = $1"
     if (!is.null(input$synthea_patients_rows_selected)) {
       name <- sessionInfo$df_synthea_patients$name[[input$synthea_patients_rows_selected]]
       sessionInfo$synthea_patient_id <- sessionInfo$df_synthea_patients$id[[input$synthea_patients_rows_selected]]
-      
-#      browser()
 
       synthea_conditions_sql <- "select cancer_related, condition_date::date as date, 'condition' as type, code, name
           from fhir_etl.condition where patient_id = $1
@@ -2240,19 +2244,63 @@ where tc.nct_id = $1"
         DT::renderDataTable({
           synthea_conditions_dt
         })
+      output$synthea_conditions_title <- renderText(sprintf('Conditions and Procedures for %s', name))
+      
+      synthea_observations_sql <- "select cancer_related, observation_date::date as date, code, category, display, value, unit
+          from fhir_etl.observation where patient_id = $1 order by date desc"
+      sessionInfo$df_synthea_observations <- safe_query(dbGetQuery, synthea_observations_sql, params = c(sessionInfo$synthea_patient_id))
+      
+      synthea_observations_dt <-
+        datatable(
+          sessionInfo$df_synthea_observations,
+          class = 'cell-border stripe compact wrap hover',
+          selection = 'single',
+          width  = "90vw",
+          colnames = c(
+            'Cancer Related',
+            'Date',
+            'LOINC',
+            'Category',
+            'Description',
+            'Value',
+            'Units'
+          ),
+          options = list(
+            escape = FALSE,
+            searching = TRUE,
+            paging = TRUE,
+            info = FALSE,
+            
+            # Highlight rows that seem cancer related.
+            rowCallback = JS('function(synRow, synData) {
+                                if (synData[1] == true) {
+                                  $(synRow).css("background-color", "#ffa");
+                                }
+                             }')
+          )
+        )
+      output$synthea_observations <-
+        DT::renderDataTable({
+          synthea_observations_dt
+        })
+      output$synthea_observations_title <- renderText(sprintf('Observations for %s', name))
     }
-    
-    output$synthea_conditions_title <- renderText(sprintf('Conditions and Procedures for %s', name))
     
     # TODO(jcallaway: figure out why initially hidden download buttons don't appear from here
 #    show('downloadSyntheaDataByCode')
   }, ignoreNULL = TRUE)
   
-  output$downloadSyntheaDataByCode <- downloadHandler(
-    filename = function() { sprintf('sec_synthea_data_by_code_%s_%s.csv', sessionInfo$synthea_code, Sys.Date()) }
-    ,
+  output$downloadSyntheaConditions <- downloadHandler(
+    filename = function() { paste('sec_synthea_conditions_procedures_data_', Sys.Date(), '.csv', sep = '') },
     content = function(file) {
-      write.csv(sessionInfo$df_synthea_data, file, row.names = FALSE)
+      write.csv(sessionInfo$df_synthea_conditions, file, row.names = FALSE)
+    }
+  )
+  
+  output$downloadSyntheaObservations <- downloadHandler(
+    filename = function() { paste('sec_synthea_observations_data_', Sys.Date(), '.csv', sep = '') },
+    content = function(file) {
+      write.csv(sessionInfo$df_synthea_observations, file, row.names = FALSE)
     }
   )
 }

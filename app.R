@@ -477,6 +477,16 @@ ui <- secure_app(
       tabPanel(
         "Synthea Patients (Breast Cancer)",
           mainPanel(fluidRow(column(12,
+              p('Patients were generated with the Synthea tool according to the following criteria:'),
+              tags$ul(
+                tags$li('Live in New York City'),
+                tags$li('Age between 40 and 80'),
+                tags$li('Diagnosed with Malignant neoplasm of breast (SNOMED CT 254837009)'),
+                tags$li('HER2 biomarker detected in cancer specimen (by FISH or immune staining)'),
+                tags$li('Treated with radiation therapy')
+              )
+          ))),
+          mainPanel(fluidRow(column(12,
               h4("Synthea Patients"),
               hr(),
               DTOutput("synthea_patients"),

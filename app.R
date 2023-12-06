@@ -506,7 +506,7 @@ ui <- secure_app(
           DTOutput("synthea_observations"),
           downloadButton("downloadSyntheaObservations", "Download Data", style = 'padding:4px; font-size:80%;')
       ))
-      ),
+      )
     )
   )
   ,

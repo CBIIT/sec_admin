@@ -696,14 +696,6 @@ observeEvent( input$exclude_industrial_trials_checkbox, {
 )
 
 #
-
-observeEvent( input$exclude_industrial_trials_checkbox, {
-  print("exclude_industrial_trials_checkbox")
-  sessionInfo$refresh_work_queue_counter <- sessionInfo$refresh_work_queue_counter + 1
-}, ignoreNULL = TRUE
-)
-
-#
 # Populate the work queue datatable ----
 #
 

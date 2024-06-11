@@ -484,10 +484,7 @@ ui <- secure_app(
                 tags$li('Diagnosed with Malignant neoplasm of breast (SNOMED CT 254837009)'),
                 tags$li('HER2 biomarker detected in cancer specimen (by FISH or immune staining)'),
                 tags$li('Treated with radiation therapy')
-              ),
-              p('Catharine355 Kutch271 (on page 3) is a good example of a patient with robust info.')
-#              span(tags$a('Catharine355 Kutch271', href='#', id='syntheaRobustPatient'),
-#                  span('is a good example of a patient with robust info.'))
+              )
           ))),
           mainPanel(fluidRow(column(12,
               h4("Synthea Patients"),
@@ -687,14 +684,6 @@ and cc.candidate_criteria_expression <> 'NO MATCH'  and t.study_source <> 'Indus
 and (cc.generated_date > cc.marked_done_date or cc.marked_done_date is null) 
 order by cc.nct_id
 "
-#
-
-observeEvent( input$exclude_industrial_trials_checkbox, {
-  print("exclude_industrial_trials_checkbox")
-  sessionInfo$refresh_work_queue_counter <- sessionInfo$refresh_work_queue_counter + 1
-}, ignoreNULL = TRUE
-)
-
 #
 
 observeEvent( input$exclude_industrial_trials_checkbox, {

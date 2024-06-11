@@ -494,22 +494,22 @@ ui <- secure_app(
               hr(),
               DTOutput("synthea_patients"),
               downloadButton("downloadSyntheaPatients", "Download Data", style = 'padding:4px; font-size:80%;')
-          )))
-        ),
-        mainPanel(fluidRow(column(12,
+          ))),
+          mainPanel(fluidRow(column(
+            12,
             h4(textOutput("synthea_conditions_title")),
             hr(),
             DTOutput("synthea_conditions"),
-            downloadButton("downloadSyntheaConditions", "Download Data", style = 'padding:4px; font-size:80%;')
-            ))
+            downloadButton("downloadSyntheaConditions", "Download Data", style = "padding:4px; font-size:80%;")
+          ))),
+          mainPanel(fluidRow(column(
+            12,
+            h4(textOutput("synthea_observations_title")),
+            hr(),
+            DTOutput("synthea_observations"),
+            downloadButton("downloadSyntheaObservations", "Download Data", style = "padding:4px; font-size:80%;")
+          )))
         ),
-        mainPanel(fluidRow(column(12,
-          h4(textOutput("synthea_observations_title")),
-          hr(),
-          DTOutput("synthea_observations"),
-          downloadButton("downloadSyntheaObservations", "Download Data", style = 'padding:4px; font-size:80%;')
-      ))
-      )
     )
   )
   ,

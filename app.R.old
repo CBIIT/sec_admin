@@ -484,10 +484,7 @@ ui <- secure_app(
                 tags$li('Diagnosed with Malignant neoplasm of breast (SNOMED CT 254837009)'),
                 tags$li('HER2 biomarker detected in cancer specimen (by FISH or immune staining)'),
                 tags$li('Treated with radiation therapy')
-              ),
-              p('Catharine355 Kutch271 (on page 3) is a good example of a patient with robust info.')
-#              span(tags$a('Catharine355 Kutch271', href='#', id='syntheaRobustPatient'),
-#                  span('is a good example of a patient with robust info.'))
+              )
           ))),
           mainPanel(fluidRow(column(12,
               h4("Synthea Patients"),

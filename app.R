@@ -1,6 +1,5 @@
 library(shiny)
 library(shinymanager)
-require(RSQLite)
 library(DBI)
 library(xtable)
 library(DT)
@@ -147,7 +146,6 @@ ui <- secure_app(
   fluidPage(
     useShinyjs(),
     useShinyFeedback(),
-    useShinyalert(),
     
     #
     # Wire up the close button on the bsmodals to fire a shiny event 
@@ -2298,6 +2296,11 @@ where tc.nct_id = $1"
     }
   )
 }
+
+onStop(function() {
+  poolClose(pool_con)
+  cat("Closing database connection pool.\n")
+})
 
 #options(shiny.port = 8888)
 shinyApp(ui = ui, server = server)

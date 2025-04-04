@@ -573,8 +573,6 @@ server <- function(input, output, session) {
   shinyjs::disable('genexp_gen_expression')
   
 
- # con = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
-  
   #
   # Select the criteria types
   #
@@ -1966,28 +1964,6 @@ where tc.nct_id = $1"
       )
     }
   )
-  
-  # observeEvent(
-  #   sessionInfo$refresh_criteria_counter,
-  #   {
-  #     if(sessionInfo$refresh_criteria_counter > 0 ) {
-  #       print("refreshing criteria")
-  #       crit_type_sel <-
-  #         sessionInfo$df_crit_type_titles$criteria_type_id[[input$criteria_types_title_only_rows_selected]]
-  #       trial_criteria_for_type_sql <-
-  #         "select nct_id, criteria_type_id, trial_criteria_orig_text,
-  #                                  trial_criteria_refined_text, trial_criteria_expression, update_date, update_by
-  #                               from trial_criteria where criteria_type_id = ? order by nct_id"
-  #       sessionCon = DBI::dbConnect(RSQLite::SQLite(), dbinfo$db_file_location)
-  #       sessionInfo$df_trial_criteria_for_type <-
-  #         dbGetQuery(sessionCon,
-  #                    trial_criteria_for_type_sql,
-  #                    params = c(crit_type_sel))
-  #       DBI::dbDisconnect(sessionCon)
-  #     }
-  #   }
-  # )
-  #-------------------------
   
   #
   # Disable or enable the test button based upon whether there is anything in the input field

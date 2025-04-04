@@ -1,0 +1,9 @@
+default:
+  # db_file_location: legacy used in /util
+  db_user_file: /opt/app_databases/users.sqlite
+  passphrase: !expr Sys.getenv("USERS_DB_PASS")
+  dbname: !expr Sys.getenv("DB_NAME", "sec")
+  host: !expr Sys.getenv("DB_HOST", "localhost")
+  user: !expr Sys.getenv("DB_USER", "secapp")
+  port: !expr Sys.getenv("DB_PORT", "5432")
+  password: !expr Sys.getenv("DB_PASS", "1234")

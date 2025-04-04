@@ -39,6 +39,11 @@ source('check_if_any.R')
 source('synthea.R')
 dbinfo <- config::get()
 
+# options(
+#   shiny.launch.browser = FALSE,
+#   shiny.port = 8081
+# )
+
 local_dbname <- dbinfo$dbname
 local_host <- dbinfo$host
 local_user <- dbinfo$user

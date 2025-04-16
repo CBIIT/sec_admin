@@ -3656,15 +3656,15 @@
     },
     "shinymanager": {
       "Package": "shinymanager",
-      "Version": "1.0.410",
-      "Source": "Repository",
+      "Version": "1.0.510",
+      "Source": "GitHub",
       "Title": "Authentication Management for 'Shiny' Applications",
       "Authors@R": "c( person(\"Benoit\", \"Thieurmel\", email = \"bthieurmel@gmail.com\", role = c(\"aut\", \"cre\")), person(\"Victor\", \"Perrier\", email = \"victor.perrier@dreamRs.fr\", role = c(\"aut\")) )",
-      "Description": "Simple and secure authentification mechanism for single 'Shiny' applications. Credentials are stored in an encrypted 'SQLite' database. Source code of main application is protected until authentication is successful.",
+      "Description": "Simple and secure authentification mechanism for single 'Shiny' applications. Credentials can be stored in an encrypted 'SQLite' database or on your own SQL Database (Postgres, MySQL, ...).  Source code of main application is protected until authentication is successful.",
       "License": "GPL-3",
       "URL": "https://github.com/datastorm-open/shinymanager",
       "Encoding": "UTF-8",
-      "RoxygenNote": "7.1.2",
+      "RoxygenNote": "7.2.1",
       "Imports": [
         "R6",
         "shiny",
@@ -3675,19 +3675,27 @@
         "openssl",
         "R.utils",
         "billboarder",
-        "scrypt"
+        "scrypt",
+        "yaml",
+        "glue"
       ],
       "Suggests": [
         "keyring",
         "testthat (>= 2.1.0)",
         "knitr",
-        "rmarkdown"
+        "rmarkdown",
+        "RPostgres",
+        "sparklyr"
       ],
       "VignetteBuilder": "knitr",
-      "NeedsCompilation": "no",
       "Author": "Benoit Thieurmel [aut, cre], Victor Perrier [aut]",
       "Maintainer": "Benoit Thieurmel <bthieurmel@gmail.com>",
-      "Repository": "CRAN"
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "crouchcd",
+      "RemoteRepo": "shinymanager",
+      "RemoteRef": "fix-respect-hashed",
+      "RemoteSha": "7476358458e65821e042e44497ac5cbff63683a5"
     },
     "shinythemes": {
       "Package": "shinythemes",

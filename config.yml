@@ -1,7 +1,7 @@
 default:
   # db_file_location: legacy used in /util
   # db_user_file: /opt/app_databases/users.sqlite # legacy used by shinymanager/SQLite. Uncomment for migrate_user_db.R
-  db_config_file: /opt/app_databases/pg_template.yml
+  db_config_file: pg_template.yml
   # passphrase: !expr Sys.getenv("USERS_DB_PASS") # legacy used by shinymanager/SQLite. Uncomment for migrate_user_db.R
   dbname: !expr Sys.getenv("DB_NAME", "sec")
   host: !expr Sys.getenv("DB_HOST", "localhost")

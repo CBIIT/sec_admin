@@ -6,9 +6,6 @@ credentials <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Create the database
-shinymanager::create_db(
-  credentials_data = credentials,
-  sqlite_path = "localdb/users.sqlite", # will be created
-  passphrase = "1234"
-)
+conf <- config::get()
+
+shinymanager::create_sql_db(credentials_data = credentials, config_path = conf$db_config_file)

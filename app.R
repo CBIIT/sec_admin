@@ -5,7 +5,6 @@ library(xtable)
 library(DT)
 library(dplyr)
 library(httr)
-library(leaflet)
 library(maps)
 library(data.table)
 library(shinythemes)
@@ -556,7 +555,7 @@ server <- function(input, output, session) {
   
   sessionInfo$result_auth <-
     secure_server(
-      check_credentials = check_credentials(dbinfo$db_config_file),
+      check_credentials = check_credentials(dbinfo$db_user_file, passphrase = dbinfo$passphrase),
       timeout = 30
     )
   #  sessionInfo$result_auth <- result_auth

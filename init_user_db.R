@@ -1,11 +1,14 @@
 # Credentials data
 credentials <- data.frame(
   user = c("poc_admin"),
-  password = c("1234"), # password will automatically be hashed
+  password = c("1234"), # password will automatically be hashed using the passphrase below
   admin = c(TRUE),
   stringsAsFactors = FALSE
 )
 
-conf <- config::get()
-
-shinymanager::create_sql_db(credentials_data = credentials, config_path = conf$db_config_file)
+# Create the database
+shinymanager::create_db(
+  credentials_data = credentials,
+  sqlite_path = "localdb/test.sqlite", # will be created, update `db_user_file` in config.yml
+  passphrase = "1234" # `passphrase` in config.yml
+)

@@ -27,7 +27,7 @@ The dashboard connects to the main SEC PostgreSQL database to generate statistic
 
 - **Migration to PostgreSQL:**  
   Migrating from SQLite to PostgreSQL is recommended since it's less error prone than working directly with the SQLite users database.
-  - See c30bbc54bf2557ca88df14bd4885f3240f992acf as a starting point for the migration.
+  - See [c30bbc5](https://github.com/CBIIT/sec_admin/commit/c30bbc54bf2557ca88df14bd4885f3240f992acf) as a starting point for the migration.
 
 ## Database Connection
 

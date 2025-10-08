@@ -53,7 +53,7 @@ The dashboard connects to the main SEC PostgreSQL database to generate statistic
 ## Production Deployment
 
 1. **Update user database:**  
-   Download the latest `users.sqlite` from the admin dashboard before deploying.
+   Download the latest `users.sqlite` from the admin dashboard and store it as `localdb/users.sqlite` before deploying.
 2. **Deploy code:**  
    Follow the deployment process (see the [main SEC POC README](https://github.com/CBIIT/sec_poc) for details).
 

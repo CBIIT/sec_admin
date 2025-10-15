@@ -1,6 +1,6 @@
-default:
-  # db_file_location: legacy used in /util
+default: &default
   db_user_file: ./localdb/users.sqlite # The SQLite database where shinymanager stores users/credentials.
+  # db_file_location: legacy used in /util
   passphrase: !expr Sys.getenv("USERS_DB_PASS") # The SQLite database decryption key.
   dbname: !expr Sys.getenv("DB_NAME", "sec")
   host: !expr Sys.getenv("DB_HOST", "localhost")
@@ -11,3 +11,9 @@ default:
   # db_config_file: pg_template.yml # The PostgreSQL schema where shinymanager stores users/credentials.
   # user_admin: !expr Sys.getenv("DB_USER_ADMIN", "secadmin")
   # password_admin: !expr Sys.getenv("DB_PASS_ADMIN", "1234")
+
+development:
+  db_user_file: ./localdb/test.sqlite # The SQLite database where shinymanager stores users/credentials.
+  <<: *default
+  shiny_launch_browser: FALSE
+  shiny_port: 8081

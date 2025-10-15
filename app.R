@@ -35,12 +35,12 @@ library(RPostgres)
 source('eval_prior_therapy_app.R')
 source('check_if_any.R')
 source('synthea.R')
-dbinfo <- config::get()
+dbinfo <- config::get(config = Sys.getenv("R_CONFIG_ACTIVE", "default"))
 
-# options(
-#   shiny.launch.browser = FALSE,
-#   shiny.port = 8081
-# )
+options(
+  shiny.launch.browser = dbinfo$shiny_launch_browser,
+  shiny.port = dbinfo$shiny_port
+)
 
 local_dbname <- dbinfo$dbname
 local_host <- dbinfo$host
@@ -552,6 +552,7 @@ server <- function(input, output, session) {
     crit_work_queue_dt = NA,
     df_synthea_codes_name = NA
   )
+  print(dbinfo)
   
   sessionInfo$result_auth <-
     secure_server(

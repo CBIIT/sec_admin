@@ -36,7 +36,7 @@ The dashboard connects to the main SEC PostgreSQL database to generate statistic
 
 ## Local Development Setup
 
-1. **Install R 4.4.1** and [renv](https://rstudio.github.io/renv/).
+1. **Install R 4.5.1** and [renv](https://rstudio.github.io/renv/).
 2. **Restore dependencies:**
    ```r
    renv::restore()

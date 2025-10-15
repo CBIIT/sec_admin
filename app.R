@@ -552,8 +552,7 @@ server <- function(input, output, session) {
     crit_work_queue_dt = NA,
     df_synthea_codes_name = NA
   )
-  print(dbinfo)
-  
+
   sessionInfo$result_auth <-
     secure_server(
       check_credentials = check_credentials(dbinfo$db_user_file, passphrase = dbinfo$passphrase),

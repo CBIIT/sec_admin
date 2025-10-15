@@ -23,7 +23,7 @@ The dashboard connects to the main SEC PostgreSQL database to generate statistic
 
 - **Production:**  
   The `localdb/users.sqlite` file is deployed to production and updated live as users interact with the site.  
-  **Important:** Before deploying a new app version, always download the latest `users.sqlite` from the admin dashboard to ensure you have the most up-to-date user data.
+  **:warning: Important:** Before deploying a new app version, always download the latest `users.sqlite` from the admin dashboard to ensure you have the most up-to-date user data. If you do forget this step, Posit Connect has a feature to rollback to a previous deployment which will have the latest users.sqlite file.
 
 - **Migration to PostgreSQL:**  
   Migrating from SQLite to PostgreSQL is recommended since it's less error prone than working directly with the SQLite users database.

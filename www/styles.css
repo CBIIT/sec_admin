@@ -1,0 +1,28 @@
+
+/*input[type="radio"]:disabled {*/
+/*  background-color: blue !important; !* Example: light gray background *!*/
+/*  border-color: green !important;     !* Example: darker gray border *!*/
+/*}*/
+
+/*!* Styling the custom indicator when the actual input is both checked and disabled *!*/
+/*input[type="radio"]:checked:disabled{*/
+/*  background-color: red !important; !* Example: medium gray fill color for checked state *!*/
+/*}*/
+.btn-newstyle{
+    color: white;
+    background-color: lightgray;
+    border-color: black;
+    border-width: 1px;
+}
+.btn-newstyle:active{
+    color: darkblue;
+    background-color: lightgray;
+    border-color: darkblue;
+    border-width: 1px;
+}
+.btn-newstyle:disabled  {
+    color: white;
+    background-color: #939393;
+    border-color: #939393;
+    border-width: 1px;
+}

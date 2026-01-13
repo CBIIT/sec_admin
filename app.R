@@ -141,9 +141,9 @@ generate_safe_query <- function(pool) {
 safe_query <<- generate_safe_query(pool_con)
 
 
-ui <- secure_app(
-  fluidPage(
+ui <- fluidPage(
     useShinyjs(),
+    includeCSS("www/styles.css"),
     useShinyFeedback(),
     
     #
@@ -195,6 +195,7 @@ ui <- secure_app(
       "add_criteria_type",
       size = "large",
       fluidPage(
+      includeCSS("www/styles.css"),
         bsAlert('criteria_type_modal_alert'),
         fluidRow(
           column( 
@@ -233,6 +234,7 @@ ui <- secure_app(
       "add_criteria_per_trial",
       size = "large",
       fluidPage(
+        includeCSS("www/styles.css"),
         id = "add_criteria_per_trial_bsmodal",
         bsAlert('criteria_modal_alert'),
         fluidRow(column(
@@ -300,6 +302,7 @@ ui <- secure_app(
       "do_work_queue_item",
       size = "large",
       fluidPage(
+        includeCSS("www/styles.css"),
         
         fluidRow(
           column( 
@@ -432,7 +435,8 @@ ui <- secure_app(
                    2, checkboxInput("exclude_industrial_trials_checkbox", "Exclude Industrial Trials", value = TRUE))
                  ,
                  column(
-                   10, radioGroupButtons("gen_exp_crit_type_rb", label = "Criteria Type", choiceNames = NA, choiceValues = NA)
+                   10, radioGroupButtons("gen_exp_crit_type_rb", label = "Criteria Type", choiceNames = NA, choiceValues = NA,
+                   status="newstyle")
                  )
                  
                ), 
@@ -455,12 +459,13 @@ ui <- secure_app(
       ,
       tabPanel("NCIt Path Explorer",
                fluidPage(
+                includeCSS("www/styles.css"),
                  
                  fluidRow(
                    column( 
-                     4, textInput("path_start_ncit_code", "Start NCIt Code")),
+                     4, textInput("path_start_ncit_code", "Parent NCIt Code")),
                    column(
-                     4,  textInput("path_end_ncit_code","End NCIt Code" )),
+                     4,  textInput("path_end_ncit_code","Descendant NCIt Code" )),
                    column(4, actionButton("generate_paths", "Show Paths"),
                           tags$style(type='text/css', "#generate_paths { width:100%; margin-top: 25px;}")
                           
@@ -514,9 +519,8 @@ ui <- secure_app(
         ),
     )
   )
-  ,
-  enable_admin = TRUE
-)
+  ui <- secure_app(ui, enable_admin = TRUE)
+
 
 
 server <- function(input, output, session) {
@@ -1249,6 +1253,7 @@ order by cc.nct_id, cc.criteria_type_id "
       session = session, inputId = "gen_exp_crit_type_rb",
       choiceNames =  sessionInfo$df_crit_types_with_all$criteria_type_title,
       choiceValues = sessionInfo$df_crit_types_with_all$criteria_type_id
+    ,status="newstyle"
     )
     
     criteria_types_titles_dt <- datatable(

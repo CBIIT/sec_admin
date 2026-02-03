@@ -9,7 +9,7 @@
 /*  background-color: red !important; !* Example: medium gray fill color for checked state *!*/
 /*}*/
 .btn-newstyle{
-    color: white;
+    color: darkblue;
     background-color: lightgray;
     border-color: black;
     border-width: 1px;
@@ -22,7 +22,7 @@
 }
 .btn-newstyle:disabled  {
     color: white;
-    background-color: #939393;
-    border-color: #939393;
+    background-color: #535353;
+    border-color: #232323;
     border-width: 1px;
 }

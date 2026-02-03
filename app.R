@@ -36,10 +36,23 @@ source('eval_prior_therapy_app.R')
 source('check_if_any.R')
 source('synthea.R')
 dbinfo <- config::get(config = Sys.getenv("R_CONFIG_ACTIVE", "default"))
-
+print('Sys.getenv("DB_PORT", "5432")')
+print(Sys.getenv("DB_PORT", "5432"))
+print('Sys.getenv("R_CONFIG_ACTIVE", "default")')
+print(Sys.getenv("R_CONFIG_ACTIVE", "default"))
+is_local<-Sys.getenv("IS_LOCAL", "NO")
+print("is_local")
+print(is_local)
+shiny_port_from_env<-strtoi(Sys.getenv("LOCAL_SHINY_PORT", "8081"))
+shiny_port <- dbinfo$shiny_port
+if (is_local=="YES") {
+    shiny_port <- shiny_port_from_env
+}
+print("shiny_port")
+print(shiny_port)
 options(
   shiny.launch.browser = dbinfo$shiny_launch_browser,
-  shiny.port = dbinfo$shiny_port
+  shiny.port = shiny_port
 )
 
 local_dbname <- dbinfo$dbname
@@ -52,7 +65,20 @@ pool_minSize <- 0
 pool_maxSize <- 3
 pool_validationInterval <- 60000000000 
 
-
+print("local_host")
+print(local_host)
+print("local_dbname")
+print(local_dbname)
+print("local_port")
+print(local_port)
+print("local_user")
+print(local_user)
+print("local_password")
+print(local_password)
+print("dbinfo$passphrase")
+print(dbinfo$passphrase)
+check_credentials(dbinfo$db_user_file, passphrase = dbinfo$passphrase)
+print("checked connection to sqlite ")
 pool_con <- dbPool(#drv = RPostgreSQL::PostgreSQL(), 
   drv = RPostgres::Postgres(),
   dbname = local_dbname,
@@ -84,6 +110,24 @@ print(pool_con)
 #
 wait_times <- c(2,2)
 
+ reorder_genx_criteria_buttons <- function(df){
+    desired_id_order <- c(8,11,5,19,1,2,254,4,255,256,3,6,18,12,258,257,17,253,7)
+    if (any(df$criteria_type_id == -666)) {
+       desired_id_order <- c(-666, 8,11,5,19,1,2,254,4,255,256,3,6,18,12,258,257,17,253,7)
+    }
+    # Get the matching indices
+    # match(vector_to_be_ordered, desired_order)
+    match_indices <- match(df$criteria_type_id, desired_id_order)
+    
+    # Order the data frame using the indices
+    newdf <- df[order(match_indices), ]
+    print(newdf)
+    newdf
+}
+ get_criteria_types_df <- function(sql) {
+   df <- safe_query(dbGetQuery, sql)
+   df <- reorder_genx_criteria_buttons(df)
+ }
 generate_safe_query <- function(pool) {
   function(db_function, ...) {
     # print("in safe query")
@@ -202,7 +246,7 @@ ui <- fluidPage(
           column( 
             6, textInput("criteria_type_code", "Code")),
           column(
-            6, textInput("criteria_type_title", "Title"))
+            6, textInput("criteria_type_title", "Criteria Type"))
           )
         ,
         fluidRow(
@@ -256,7 +300,7 @@ ui <- fluidPage(
         fluidRow(
           textAreaInput(
             "criteria_per_trial_original_text",
-            "Original Text",
+            "Original unstructured free text from CTS API",
             value = "",
             rows = 7,
             resize = "both"
@@ -379,17 +423,17 @@ ui <- fluidPage(
             fileInput("trial_criteria_csv_file", "Upload CSV File",
                       accept = ".csv"
             )
-            
+
           ),
           mainPanel(DTOutput("trial_crit_by_type"),
                     downloadButton("downloadTrialDataByType", "Download Trial Criteria", style =
                                      'padding:4px; font-size:80%'))
         )
-        
-      )      
+
+      )
       ,
       #end of trial criteria per type
-      tabPanel("Criteria Per Trial",
+      tabPanel("Trial Criteria by Trial",
                sidebarLayout(
                  sidebarPanel(
                    DTOutput("criteria_nct_ids"),
@@ -557,6 +601,10 @@ server <- function(input, output, session) {
     crit_work_queue_dt = NA,
     df_synthea_codes_name = NA
   )
+print("dbinfo$db_user_file")
+print(dbinfo$db_user_file)
+print("dbinfo$passphrase")
+print(dbinfo$passphrase)
   sessionInfo$result_auth <-
     secure_server(
       check_credentials = check_credentials(dbinfo$db_user_file, passphrase = dbinfo$passphrase),
@@ -698,7 +746,36 @@ observeEvent( input$exclude_industrial_trials_checkbox, {
   sessionInfo$refresh_work_queue_counter <- sessionInfo$refresh_work_queue_counter + 1
 }, ignoreNULL = TRUE
 )
-
+# observeEvent( input$show_all_criteria_buttons, {
+#   print("show_all_criteria_buttons checkbox")
+#   if (is.null(input$show_all_criteria_buttons) ||input$show_all_criteria_buttons == FALSE ) {
+#     if (! is.null(sessionInfo$df_crit_type_titles_important )){
+#           sessionInfo$df_crit_type_titles_important <- sessionInfo$df_crit_type_titles  %>% filter(criteria_type_id %in% c(8,11,5))
+#           sessionInfo$df_crit_types_important <- sessionInfo$df_crit_types_with_all %>% filter(criteria_type_id %in% c(8,11,5))
+#           updateRadioGroupButtons(
+#               session = session, inputId = "gen_exp_crit_type_rb",
+#               choiceNames =  sessionInfo$df_crit_types_important$criteria_type_title,
+#               choiceValues = sessionInfo$df_crit_types_important$criteria_type_id
+#               #,disabledChoices = c(1,2,3,4,12,17,18,19,257)
+#               #c("Diseases Inclusion (NLP)", "Immunotherapy Exclusion", "Biomarker Inclusion", "Biomarker Exclusion")
+#            )
+#     }
+#   } else {
+#       if (! is.null(sessionInfo$df_crit_type_titles_important )){
+#           sessionInfo$df_crit_type_titles_important <- sessionInfo$df_crit_type_titles  %>% filter(criteria_type_id %in% c(8,11,5))
+#           sessionInfo$df_crit_types_important <- sessionInfo$df_crit_types_with_all
+#           updateRadioGroupButtons(
+#               session = session, inputId = "gen_exp_crit_type_rb",
+#               choiceNames =  sessionInfo$df_crit_types_important$criteria_type_title,
+#               choiceValues = sessionInfo$df_crit_types_important$criteria_type_id
+#               #,disabledChoices = c(1,2,3,4,12,17,18,19,257)
+#               #c("Diseases Inclusion (NLP)", "Immunotherapy Exclusion", "Biomarker Inclusion", "Biomarker Exclusion")
+#            )
+#       }
+#   }
+#   },
+#    ignoreNULL = TRUE
+# )
 #
 # Populate the work queue datatable ----
 #
@@ -1145,16 +1222,18 @@ observeEvent(input$crit_with_cands_count_rows_selected, {
   
   if (!is.null(input$crit_with_cands_count_rows_selected)) {
     select_cands_sql <- "
-  SELECT cc.nct_id, cc.criteria_type_id,
+  SELECT
+  t.current_trial_status,
+  cc.nct_id, cc.criteria_type_id,
 case
   when cc.inclusion_indicator = true then 'Inclusion: ' || cc.candidate_criteria_text
   when cc.inclusion_indicator = false then 'Exclusion: ' || cc.candidate_criteria_text
 end cand_crit_text,
 cc.candidate_criteria_norm_form, cc.candidate_criteria_expression
-
 from candidate_criteria cc
 join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
 left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
+left outer join trials t on cc.nct_id=t.nct_id
 where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' ) and cc.criteria_type_id = $1
 order by cc.nct_id, cc.criteria_type_id "
     print(sessionInfo$df_crit_with_cands_count[input$crit_with_cands_count_rows_selected,]$criteria_type_id)
@@ -1173,6 +1252,7 @@ order by cc.nct_id, cc.criteria_type_id "
         selection = 'single',
         width  = "90vw",
         colnames = c(
+        'Current Trial Status',
           'NCT ID',
           'Type ID',
           'Candidate Original Text',
@@ -1205,8 +1285,11 @@ order by cc.nct_id, cc.criteria_type_id "
   ##
   
   observe({
-    sessionInfo$df_crit_types <- safe_query(dbGetQuery, crit_type_sql)
-    sessionInfo$df_crit_types_with_all <- safe_query(dbGetQuery, crit_type_sql_with_all)
+    sessionInfo$df_crit_types <- get_criteria_types_df(crit_type_sql)
+    sessionInfo$df_crit_types_with_all <- get_criteria_types_df(crit_type_sql_with_all)
+
+#     sessionInfo$df_crit_types_important <- sessionInfo$df_crit_types_with_all %>% filter(criteria_type_id %in% c(8,11,5))
+#     print(sessionInfo$df_crit_types_important)
     criteria_types_dt <- datatable(
       sessionInfo$df_crit_types,
       class = 'cell-border stripe compact wrap hover',
@@ -1232,8 +1315,10 @@ order by cc.nct_id, cc.criteria_type_id "
   
   observe({
 
-    sessionInfo$df_crit_type_titles <- safe_query(dbGetQuery, crit_type_titles_sql)
-
+    sessionInfo$df_crit_type_titles <- get_criteria_types_df(crit_type_titles_sql)
+    print("colnames(sessionInfo$df_crit_type_titles)")
+    print(colnames(sessionInfo$df_crit_type_titles))
+    # sessionInfo$df_crit_type_titles_important <- sessionInfo$df_crit_type_titles  %>% filter(criteria_type_id %in% c(8,11,5))
     updateSelectizeInput(
       session,
       'criteria_type_typer',
@@ -1253,6 +1338,7 @@ order by cc.nct_id, cc.criteria_type_id "
       session = session, inputId = "gen_exp_crit_type_rb",
       choiceNames =  sessionInfo$df_crit_types_with_all$criteria_type_title,
       choiceValues = sessionInfo$df_crit_types_with_all$criteria_type_id
+      ,disabledChoices = c(19,1,2,254,4,255,256,3,6,18,12,258,257,17,253,7)
     ,status="newstyle"
     )
     
@@ -1261,7 +1347,7 @@ order by cc.nct_id, cc.criteria_type_id "
       class = 'cell-border stripe compact wrap hover',
       selection = 'single',
       colnames = c('Type ID',
-                   'Title'),
+                   'Criteria Type'),
       options = list(
         escape = FALSE,
         searching = FALSE,
@@ -1547,10 +1633,9 @@ order by cc.nct_id, cc.criteria_type_id "
     sessionInfo$refresh_criteria_types_counter,
     {
       print("need to refresh criteria types")
-      sessionInfo$df_crit_types <- safe_query(dbGetQuery, crit_type_sql)
-      sessionInfo$df_crit_type_titles <- safe_query(dbGetQuery, crit_type_titles_sql)
-      sessionInfo$df_crit_types_with_all <- safe_query(dbGetQuery, crit_type_sql_with_all)
-      
+      sessionInfo$df_crit_types <- get_criteria_types_df(crit_type_sql)
+      sessionInfo$df_crit_type_titles <- get_criteria_types_df(crit_type_titles_sql)
+      sessionInfo$df_crit_types_with_all <- get_criteria_types_df(crit_type_sql_with_all)
       
       # MAYBE
       sessionInfo$df_criteria_nct_id <- safe_query(dbGetQuery, criteria_nct_ids_sql)
@@ -1624,7 +1709,7 @@ order by cc.nct_id, cc.criteria_type_id "
                        colnames = c(
                          'NCT ID',
                          'Type ID',
-                         'Original Text',
+                         'Original unstructured free text from CTS API',
                          'Refined Text',
                          'Expression',
                          'Last Updated',
@@ -1669,9 +1754,10 @@ order by cc.nct_id, cc.criteria_type_id "
         sessionInfo$df_criteria_nct_id$nct_id[[input$criteria_nct_ids_rows_selected]]
       print(paste("nct_id selected:", nct_id_sel))
       trial_crit_for_ncit_id_sql <-
-        "select tc.nct_id, ct.criteria_type_title, tc.trial_criteria_orig_text, tc.trial_criteria_refined_text,
+        "select t.current_trial_status, tc.nct_id, ct.criteria_type_title, tc.trial_criteria_orig_text, tc.trial_criteria_refined_text,
 tc.trial_criteria_expression, to_char(tc.update_date, 'YYYY-MM-DD HH24:MI:SS') as update_date, tc.update_by
 from trial_criteria tc join criteria_types ct on tc.criteria_type_id= ct.criteria_type_id
+join trials t on t.nct_id = tc.nct_id
 where tc.nct_id = $1"
       sessionInfo$df_trial_criteria_for_nct_id <-
         safe_query(dbGetQuery,
@@ -1686,6 +1772,7 @@ where tc.nct_id = $1"
           selection = 'single',
           width  = "90vw",
           colnames = c(
+          'Current Trial Status',
             'NCT ID',
             'Type',
             'Original Text',
@@ -1815,6 +1902,7 @@ where tc.nct_id = $1"
   # Row selected in trial criteria table per trial
   #
   observeEvent(input$trial_crit_per_trial_rows_selected, {
+  print("trial_crit_per_trial_rows_selected????")
     if (!is.null(input$trial_crit_per_trial_rows_selected)) {
       shinyjs::enable('edit_criteria_per_trial')
       shinyjs::enable('delete_criteria_per_trial')

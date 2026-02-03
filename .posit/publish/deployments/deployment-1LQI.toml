@@ -2,7 +2,7 @@
 '$schema' = 'https://cdn.posit.co/publisher/schemas/posit-publishing-record-schema-v3.json'
 server_type = 'connect'
 server_url = 'https://appshare-dev.cancer.gov'
-client_version = '1.22.0'
+client_version = '1.28.0'
 created_at = ''
 dismissed_at = ''
 type = 'r-shiny'
@@ -11,21 +11,24 @@ id = '4a00bf2a-7468-4c37-9c65-8e33dd561c0c'
 dashboard_url = 'https://appshare-dev.cancer.gov/connect/#/apps/4a00bf2a-7468-4c37-9c65-8e33dd561c0c'
 direct_url = 'https://appshare-dev.cancer.gov/content/4a00bf2a-7468-4c37-9c65-8e33dd561c0c/'
 logs_url = 'https://appshare-dev.cancer.gov/connect/#/apps/4a00bf2a-7468-4c37-9c65-8e33dd561c0c/logs'
-deployed_at = '2025-10-15T12:49:28Z'
-bundle_id = '1295'
-bundle_url = 'https://appshare-dev.cancer.gov/__api__/v1/content/4a00bf2a-7468-4c37-9c65-8e33dd561c0c/bundles/1295/download'
+deployed_at = '2026-01-27T15:36:23-05:00'
+bundle_id = '1748'
+bundle_url = 'https://appshare-dev.cancer.gov/__api__/v1/content/4a00bf2a-7468-4c37-9c65-8e33dd561c0c/bundles/1748/download'
 files = [
   '.posit/publish/deployments/deployment-1LQI.toml',
   '.posit/publish/sec_admin-BVPI.toml',
+  'app-260114.R',
   'app.R',
   'check_if_any.R',
   'config.yml',
   'eval_prior_therapy_app.R',
+  'git-bkup/app.R',
   'localdb/users.sqlite',
   'renv.lock',
   'renv/activate.R',
   'synthea.R',
-  'transform_prior_therapy.R'
+  'transform_prior_therapy.R',
+  'www/styles.css'
 ]
 
 [configuration]
@@ -43,13 +46,14 @@ files = [
   '/config.yml',
   '/localdb/users.sqlite',
   '!/init_user_db.R',
-  '!/migrate_user_db.R'
+  '!/migrate_user_db.R',
+  '/www'
 ]
 title = 'sec_admin'
 secrets = ['DB_HOST', 'DB_NAME', 'DB_PASS', 'DB_PORT', 'DB_USER', 'USERS_DB_PASS']
 
 [configuration.r]
-version = '4.5.1'
+version = '4.5.2'
 package_file = 'renv.lock'
 package_manager = 'renv'
 requires_r = '~=4.5.0'

@@ -648,12 +648,15 @@ print(dbinfo$passphrase)
     "select distinct nct_id from trial_criteria order by nct_id"
   
   crit_with_cands_count_sql <- 
-    "with cand_crit_count as (
-select  criteria_type_id , count(criteria_type_id) as crit_count from candidate_criteria
-group by criteria_type_id
-)
-select ct.criteria_type_id, ct.criteria_type_title, ccc.crit_count
-from criteria_types ct join cand_crit_count ccc on ct.criteria_type_id = ccc.criteria_type_id"
+    "  SELECT
+  ct.criteria_type_id, ct.criteria_type_title,
+    count(*)
+from candidate_criteria cc
+join criteria_types ct on cc.criteria_type_id = ct.criteria_type_id
+left outer join trial_criteria tc on cc.nct_id = tc.nct_id and cc.criteria_type_id = tc.criteria_type_id
+left outer join trials t on cc.nct_id=t.nct_id
+where (tc.trial_criteria_expression is null or tc.trial_criteria_expression = '' )
+group by ct.criteria_type_id, ct.criteria_type_title"
  
 work_queue_all_sql <- "
  SELECT cc.nct_id, ct.criteria_type_id, cc.display_order, ct.criteria_type_title,
@@ -1194,7 +1197,7 @@ observe({
     class = 'cell-border stripe compact wrap hover',
     selection = 'single',
     colnames = c('Type ID',
-                 'Title',
+                 'Criteria Type',
                  'Num Cand Crit'),
     options = list(
       escape = FALSE,

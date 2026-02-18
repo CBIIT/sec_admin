@@ -1295,6 +1295,7 @@ order by cc.nct_id, cc.criteria_type_id "
 #     print(sessionInfo$df_crit_types_important)
     criteria_types_dt <- datatable(
       sessionInfo$df_crit_types,
+      rownames = FALSE,
       class = 'cell-border stripe compact wrap hover',
       selection = 'single',
       colnames = c('Type ID',

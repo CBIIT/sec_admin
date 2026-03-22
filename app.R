@@ -889,7 +889,64 @@ observeEvent(sessionInfo$refresh_work_queue_counter, {
 observeEvent(input$generate_paths, {
   print(paste('generate paths',input$path_start_ncit_code , ' to ', input$path_end_ncit_code))
 
+path_parent_descendant_sql <- "  with all_things as (
+ select tcp.parent as parent_code, n1.pref_name as parent,
+            tcp.descendant as descendant_code, n2.pref_name as descendant, tcp.level, tcp.path
+from ncit_tc_with_path tcp
+join ncit n1 on tcp.parent = n1.code
+join ncit n2 on tcp.descendant = n2.code
+where tcp.parent = $1 and tcp.descendant = $2
+)
+select al.parent_code, al.parent, al.descendant_code, al.descendant, al.level, al.path
+from all_things al"
+path_parent_sql <- "   with all_things as (select tcp.parent as parent_code, n1.pref_name as parent,
+            tcp.descendant as descendant_code, n2.pref_name as descendant, tcp.level, tcp.path
+from ncit_tc_with_path tcp
+join ncit n1 on tcp.parent = n1.code
+join ncit n2 on tcp.descendant = n2.code
+where tcp.parent = $1
+)
+select al.parent_code, al.parent, al.descendant_code, al.descendant, al.level, al.path
+from all_things al"
+path_descendant_sql <- "   with all_things as (select tcp.parent as parent_code, n1.pref_name as parent,
+            tcp.descendant as descendant_code, n2.pref_name as descendant, tcp.level, tcp.path
+from ncit_tc_with_path tcp
+join ncit n1 on tcp.parent = n1.code
+join ncit n2 on tcp.descendant = n2.code
+where tcp.descendant = $1
+)
+select al.parent_code, al.parent, al.descendant_code, al.descendant, al.level, al.path
+from all_things al"
 
+get_paths <- function(parent, descendant) {
+  parent <- trimws(if (is.null(parent)) "" else parent)
+  descendant <- trimws(if (is.null(descendant)) "" else descendant)
+
+  if (nzchar(parent) && nzchar(descendant)) {
+    sql <- path_parent_descendant_sql
+    rs <- safe_query(
+      dbGetQuery,
+      sql,
+      params = c(parent, descendant)
+    )
+  } else if (nzchar(parent)) {
+    sql <- path_parent_sql
+    rs <- safe_query(
+      dbGetQuery,
+      sql,
+      params = c(parent)
+    )
+  } else {
+    sql <- path_descendant_sql
+    rs <- safe_query(
+      dbGetQuery,
+      sql,
+      params = c(descendant)
+    )
+  }
+
+  return(rs)
+}
   get_path_info_sql <- 
     "
   with all_things as (
@@ -903,9 +960,9 @@ where tcp.parent = $1 and tcp.descendant = $2
 select al.parent_code, al.parent, al.descendant_code, al.descendant, al.level, al.path 
 from all_things al
 "
-  rs <- safe_query(dbGetQuery, get_path_info_sql, 
-                   params = c(trimws(input$path_start_ncit_code),  trimws(input$path_end_ncit_code)) ) 
-
+#   rs <- safe_query(dbGetQuery, get_path_info_sql,
+#                    params = c(trimws(input$path_start_ncit_code),  trimws(input$path_end_ncit_code)) )
+  rs <- get_paths(trimws(input$path_start_ncit_code), trimws(input$path_end_ncit_code))
   rs$enumerated_path <-
     lapply(rs$path,
            function(x)

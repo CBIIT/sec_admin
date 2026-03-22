@@ -11,9 +11,9 @@ id = '4a00bf2a-7468-4c37-9c65-8e33dd561c0c'
 dashboard_url = 'https://appshare-dev.cancer.gov/connect/#/apps/4a00bf2a-7468-4c37-9c65-8e33dd561c0c'
 direct_url = 'https://appshare-dev.cancer.gov/content/4a00bf2a-7468-4c37-9c65-8e33dd561c0c/'
 logs_url = 'https://appshare-dev.cancer.gov/connect/#/apps/4a00bf2a-7468-4c37-9c65-8e33dd561c0c/logs'
-deployed_at = '2026-02-11T10:32:36-05:00'
-bundle_id = '1792'
-bundle_url = 'https://appshare-dev.cancer.gov/__api__/v1/content/4a00bf2a-7468-4c37-9c65-8e33dd561c0c/bundles/1792/download'
+deployed_at = '2026-02-18T16:00:38-05:00'
+bundle_id = '1805'
+bundle_url = 'https://appshare-dev.cancer.gov/__api__/v1/content/4a00bf2a-7468-4c37-9c65-8e33dd561c0c/bundles/1805/download'
 files = [
   '.posit/publish/deployments/deployment-1LQI.toml',
   '.posit/publish/sec_admin-BVPI.toml',
